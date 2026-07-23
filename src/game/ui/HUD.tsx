@@ -24,6 +24,7 @@ export function HUD() {
   const biteProgress = useGameStore((s) => s.biteProgress)
   const fightProgress = useGameStore((s) => s.fightProgress)
   const encyclopedia = useGameStore((s) => s.encyclopedia)
+  const nearWater = useGameStore((s) => s.nearWater)
   const cast = useGameStore((s) => s.cast)
   const tryHook = useGameStore((s) => s.tryHook)
   const cycleTimeOfDay = useGameStore((s) => s.cycleTimeOfDay)
@@ -35,11 +36,13 @@ export function HUD() {
         <div className="title-card">
           <p className="title-kicker">清流の釣り体験</p>
           <h1>Fishingforever</h1>
-          <p className="title-sub">はじまりキャンプ — ウキ釣りプロトタイプ</p>
+          <p className="title-sub">
+            はじまりキャンプ — 歩いて、好きな場所からキャスト
+          </p>
           <button type="button" className="btn primary" onClick={startGame}>
             釣りをはじめる
           </button>
-          <p className="hint">操作: クリック / スペース</p>
+          <p className="hint">WASD 移動 ／ スペース キャスト・アワセ</p>
         </div>
       </div>
     )
@@ -58,6 +61,7 @@ export function HUD() {
           <strong>{locationName}</strong>
           <span className="meta">
             {SEASON_LABEL[season]}・{TIME_LABEL[timeOfDay]}
+            {nearWater ? ' ・水際' : ' ・岸'}
           </span>
         </div>
         <div className="meta">
@@ -84,7 +88,7 @@ export function HUD() {
 
       {phase === 'underwater_fight' && (
         <div className="fight-meter">
-          <div className="bite-label">ファイト中 — 鑑賞しよう</div>
+          <div className="bite-label">ファイト中 — 魚を鑑賞</div>
           <div className="meter-track">
             <div
               className="meter-fill fight"
@@ -96,20 +100,26 @@ export function HUD() {
 
       <footer className="bottom-bar">
         {(phase === 'idle' || phase === 'waiting_float') && (
-          <button
-            type="button"
-            className="btn primary"
-            onClick={cast}
-            disabled={phase !== 'idle'}
-          >
-            {phase === 'idle' ? 'キャスト' : 'ウキ待ち…'}
-          </button>
+          <>
+            <span className="hint">WASD 移動</span>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={cast}
+              disabled={phase !== 'idle' || !nearWater}
+              title={!nearWater ? '水際に近づいてください' : 'キャスト'}
+            >
+              {phase === 'idle'
+                ? nearWater
+                  ? 'キャスト'
+                  : '水際へ…'
+                : 'ウキ待ち…'}
+            </button>
+          </>
         )}
-        {phase === 'casting' && (
-          <span className="hint">キャスト中…</span>
-        )}
+        {phase === 'casting' && <span className="hint">キャスト中…</span>}
         <button type="button" className="btn ghost" onClick={cycleTimeOfDay}>
-          時間帯切替（仮）
+          時間帯切替
         </button>
       </footer>
     </div>

@@ -1,4 +1,4 @@
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect } from 'react'
 import { SurfaceScene } from './game/scenes/SurfaceScene'
 import { UnderwaterScene } from './game/scenes/UnderwaterScene'
@@ -6,20 +6,7 @@ import { useGameStore } from './game/store'
 import { CatchResult } from './game/ui/CatchResult'
 import { HUD } from './game/ui/HUD'
 import './App.css'
-
-function CameraRig({ underwater }: { underwater: boolean }) {
-  const { camera } = useThree()
-  useEffect(() => {
-    if (underwater) {
-      camera.position.set(0.2, 0.35, 3.4)
-      camera.lookAt(0, -0.1, -0.5)
-    } else {
-      camera.position.set(0.4, 3.5, 8.2)
-      camera.lookAt(0, 0.4, 0.5)
-    }
-  }, [underwater, camera])
-  return null
-}
+import * as THREE from 'three'
 
 function GameCanvas() {
   const phase = useGameStore((s) => s.phase)
@@ -29,15 +16,14 @@ function GameCanvas() {
   return (
     <Canvas
       shadows
-      camera={{ position: [0, 3.4, 8.2], fov: 48, near: 0.1, far: 90 }}
+      camera={{ position: [0.4, 4.2, 2.0], fov: 48, near: 0.1, far: 100 }}
       dpr={[1, 1.75]}
       gl={{
         antialias: true,
-        toneMapping: 4 /* THREE.ACESFilmicToneMapping */,
-        toneMappingExposure: 1.05,
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 1.08,
       }}
     >
-      <CameraRig underwater={underwater} />
       <Suspense fallback={null}>
         {underwater ? <UnderwaterScene /> : <SurfaceScene />}
       </Suspense>
@@ -54,7 +40,9 @@ function useInputBindings() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // WASD は移動用なのでスペース／Enter のみアクション
       if (e.code !== 'Space' && e.code !== 'Enter') return
+      // 入力欄などはない前提
       e.preventDefault()
       if (phase === 'title') startGame()
       else if (phase === 'idle') cast()

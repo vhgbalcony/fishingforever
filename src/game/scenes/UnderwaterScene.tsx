@@ -1,4 +1,4 @@
-import { SoftShadows } from '@react-three/drei'
+import { Environment, SoftShadows } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -10,29 +10,38 @@ function FightingFish() {
   const species = useGameStore((s) => s.activeSpecies)
   const fightProgress = useGameStore((s) => s.fightProgress)
   const group = useRef<THREE.Group>(null)
-  const lineRef = useRef<THREE.Mesh>(null)
+  const lineGeo = useMemo(() => {
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3))
+    return g
+  }, [])
+  const lineRef = useRef<THREE.Line>(null)
 
   useFrame(({ clock }) => {
     if (!group.current || !species) return
     const t = clock.elapsedTime
-    const thrash = (1 - fightProgress) * 0.85 + 0.15
-    group.current.position.x = Math.sin(t * 3.1) * 0.95 * thrash
-    group.current.position.y = -0.1 + Math.sin(t * 2.2) * 0.32 * thrash
-    group.current.position.z = -1.4 + fightProgress * 1.55
-    group.current.rotation.y =
-      Math.PI + Math.sin(t * 2.4) * 0.55 * thrash
-    group.current.rotation.z = Math.sin(t * 3.8) * 0.22 * thrash
-    group.current.rotation.x = Math.sin(t * 2.0) * 0.12 * thrash
-    const s = 0.9 + species.avgLengthCm / 70
+    const thrash = (1 - fightProgress) * 0.88 + 0.12
+    const x = Math.sin(t * 3.0) * 1.0 * thrash
+    const y = -0.15 + Math.sin(t * 2.1) * 0.3 * thrash
+    const z = -1.5 + fightProgress * 1.6
+    group.current.position.set(x, y, z)
+    group.current.rotation.set(
+      Math.sin(t * 2.0) * 0.15 * thrash,
+      Math.PI + Math.sin(t * 2.3) * 0.55 * thrash,
+      Math.sin(t * 3.6) * 0.25 * thrash,
+    )
+    const s = 0.95 + species.avgLengthCm / 68
     group.current.scale.setScalar(s)
 
     if (lineRef.current) {
-      // 口元から上へ向かうライン
-      lineRef.current.position.set(
-        group.current.position.x + 0.35 * Math.cos(group.current.rotation.y),
-        group.current.position.y + 0.15,
-        group.current.position.z + 0.35 * Math.sin(group.current.rotation.y),
-      )
+      const pos = lineGeo.attributes.position as THREE.BufferAttribute
+      // 口元
+      const mx = x + Math.cos(group.current.rotation.y) * 0.35
+      const my = y + 0.05
+      const mz = z + Math.sin(group.current.rotation.y) * 0.35
+      pos.setXYZ(0, mx, my + 2.2, mz)
+      pos.setXYZ(1, mx, my, mz)
+      pos.needsUpdate = true
     }
   })
 
@@ -42,16 +51,14 @@ function FightingFish() {
     <>
       <group ref={group}>
         <FishModel
-          color={species.color}
-          accentColor={species.accentColor}
-          finWave={0.85}
-          scale={1}
+          speciesId={species.id}
+          finWave={0.9}
+          scale={1.05}
         />
       </group>
-      <mesh ref={lineRef}>
-        <cylinderGeometry args={[0.006, 0.006, 3.5, 5]} />
-        <meshBasicMaterial color="#dfe8e8" transparent opacity={0.4} />
-      </mesh>
+      <line ref={lineRef as never} geometry={lineGeo}>
+        <lineBasicMaterial color="#d5e4e4" transparent opacity={0.4} />
+      </line>
     </>
   )
 }
@@ -60,12 +67,12 @@ function Bubbles() {
   const group = useRef<THREE.Group>(null)
   const seeds = useMemo(
     () =>
-      Array.from({ length: 36 }, (_, i) => ({
+      Array.from({ length: 40 }, (_, i) => ({
         x: (Math.random() - 0.5) * 7,
         y: Math.random() * 4 - 1.5,
         z: (Math.random() - 0.5) * 5,
-        s: 0.018 + Math.random() * 0.05,
-        sp: 0.18 + Math.random() * 0.55,
+        s: 0.015 + Math.random() * 0.045,
+        sp: 0.16 + Math.random() * 0.5,
         phase: Math.random() * Math.PI * 2,
         i,
       })),
@@ -78,8 +85,8 @@ function Bubbles() {
       const seed = seeds[i]!
       child.position.y += seed.sp * dt
       child.position.x =
-        seed.x + Math.sin(performance.now() * 0.001 + seed.phase) * 0.15
-      if (child.position.y > 2.8) child.position.y = -1.8
+        seed.x + Math.sin(performance.now() * 0.001 + seed.phase) * 0.12
+      if (child.position.y > 2.6) child.position.y = -1.8
     })
   })
 
@@ -87,14 +94,15 @@ function Bubbles() {
     <group ref={group}>
       {seeds.map((s) => (
         <mesh key={s.i} position={[s.x, s.y, s.z]}>
-          <sphereGeometry args={[s.s, 10, 10]} />
+          <sphereGeometry args={[s.s, 12, 12]} />
           <meshPhysicalMaterial
-            color="#c8f0ff"
+            color="#c8f4ff"
             transparent
-            opacity={0.35}
-            roughness={0.1}
-            transmission={0.4}
-            thickness={0.2}
+            opacity={0.32}
+            roughness={0.05}
+            transmission={0.55}
+            thickness={0.25}
+            ior={1.33}
           />
         </mesh>
       ))}
@@ -107,35 +115,35 @@ function CausticsLight() {
   useFrame(({ clock }) => {
     if (!light.current) return
     const t = clock.elapsedTime
-    light.current.position.x = Math.sin(t * 0.7) * 1.5
-    light.current.position.z = Math.cos(t * 0.5) * 1.2
-    light.current.intensity = 1.2 + Math.sin(t * 2.2) * 0.35
+    light.current.position.x = Math.sin(t * 0.7) * 1.6
+    light.current.position.z = Math.cos(t * 0.5) * 1.3
+    light.current.intensity = 1.4 + Math.sin(t * 2.4) * 0.4
   })
   return (
     <spotLight
       ref={light}
-      position={[0, 4.5, 0]}
-      angle={0.75}
-      penumbra={0.7}
-      intensity={1.3}
-      color="#b8fff0"
+      position={[0, 5, 0]}
+      angle={0.8}
+      penumbra={0.75}
+      intensity={1.5}
+      color="#c8fff2"
       castShadow
-      distance={18}
+      distance={20}
     />
   )
 }
 
 function RiverBed() {
   const bedGeo = useMemo(() => {
-    const g = new THREE.PlaneGeometry(22, 16, 48, 32)
+    const g = new THREE.PlaneGeometry(22, 16, 64, 48)
     const pos = g.attributes.position
     const v = new THREE.Vector3()
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i)
       const n =
-        Math.sin(v.x * 0.7) * 0.08 +
-        Math.cos(v.y * 0.9) * 0.06 +
-        Math.sin(v.x * 2.1 + v.y) * 0.03
+        Math.sin(v.x * 0.7) * 0.09 +
+        Math.cos(v.y * 0.9) * 0.07 +
+        Math.sin(v.x * 2.2 + v.y * 1.4) * 0.035
       v.z = n
       pos.setXYZ(i, v.x, v.y, v.z)
     }
@@ -145,15 +153,15 @@ function RiverBed() {
 
   const pebbles = useMemo(
     () =>
-      Array.from({ length: 22 }, (_, i) => ({
+      Array.from({ length: 28 }, (_, i) => ({
         p: [
-          (i % 8) * 1.1 - 3.8 + (i % 3) * 0.15,
-          -1.92 + (i % 5) * 0.01,
-          ((i * 3) % 7) * 0.7 - 2.2,
+          (i % 9) * 1.05 - 4.2 + (i % 3) * 0.12,
+          -1.93 + (i % 5) * 0.01,
+          ((i * 3) % 8) * 0.65 - 2.4,
         ] as [number, number, number],
-        s: 0.12 + (i % 5) * 0.05,
+        s: 0.1 + (i % 6) * 0.045,
         seed: i + 20,
-        c: i % 2 === 0 ? '#6a6558' : '#7a7264',
+        c: i % 3 === 0 ? '#6a6558' : i % 3 === 1 ? '#7a7264' : '#5c564c',
       })),
     [],
   )
@@ -167,48 +175,32 @@ function RiverBed() {
         receiveShadow
       >
         <meshStandardMaterial
-          color="#3d382c"
+          color="#3a3428"
           roughness={0.95}
           metalness={0.02}
           flatShading
         />
       </mesh>
-      {/* 砂の筋 */}
-      <mesh rotation={[-Math.PI / 2, 0, 0.2]} position={[0.5, -1.97, 0.4]}>
-        <planeGeometry args={[8, 3]} />
-        <meshStandardMaterial
-          color="#5a4f3c"
-          transparent
-          opacity={0.55}
-          roughness={1}
-        />
+      <mesh rotation={[-Math.PI / 2, 0, 0.15]} position={[0.4, -1.96, 0.3]}>
+        <planeGeometry args={[9, 3.5]} />
+        <meshStandardMaterial color="#5a4e3a" transparent opacity={0.5} roughness={1} />
       </mesh>
       {pebbles.map((p, i) => (
-        <RiverRock
-          key={i}
-          position={p.p}
-          scale={p.s}
-          seed={p.seed}
-          color={p.c}
-        />
+        <RiverRock key={i} position={p.p} scale={p.s} seed={p.seed} color={p.c} />
       ))}
-      {/* 水草 */}
-      {[-2, -0.5, 1.2, 2.8].map((x, i) => (
-        <group key={i} position={[x, -2.0, -1.5 + (i % 2) * 1.2]}>
-          {[0, 1, 2, 3].map((j) => (
+      {[-2.2, -0.4, 1.4, 3.0].map((x, i) => (
+        <group key={i} position={[x, -2.0, -1.3 + (i % 2) * 1.1]}>
+          {[0, 1, 2, 3, 4].map((j) => (
             <mesh
               key={j}
-              position={[
-                Math.sin(j) * 0.08,
-                0.35 + j * 0.12,
-                Math.cos(j) * 0.05,
-              ]}
-              rotation={[0.2, j, 0.15 * j]}
+              position={[Math.sin(j + i) * 0.07, 0.4 + j * 0.1, Math.cos(j) * 0.04]}
+              rotation={[0.15 * j, j * 0.4, 0.1]}
             >
-              <coneGeometry args={[0.04, 0.7 + j * 0.08, 5]} />
-              <meshStandardMaterial
-                color={j % 2 ? '#1f5c3a' : '#2a7048'}
-                roughness={0.8}
+              <coneGeometry args={[0.035, 0.75 + j * 0.06, 5]} />
+              <meshPhysicalMaterial
+                color={j % 2 ? '#1a5a38' : '#247048'}
+                roughness={0.7}
+                transmission={0.05}
               />
             </mesh>
           ))}
@@ -222,17 +214,17 @@ function SurfaceShimmer() {
   const mat = useRef<THREE.MeshBasicMaterial>(null)
   useFrame(({ clock }) => {
     if (mat.current) {
-      mat.current.opacity = 0.08 + Math.sin(clock.elapsedTime * 1.6) * 0.04
+      mat.current.opacity = 0.07 + Math.sin(clock.elapsedTime * 1.7) * 0.04
     }
   })
   return (
-    <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 1.6, 0]}>
+    <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 1.55, 0]}>
       <planeGeometry args={[16, 12]} />
       <meshBasicMaterial
         ref={mat}
-        color="#a8fff0"
+        color="#b8fff4"
         transparent
-        opacity={0.1}
+        opacity={0.09}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -249,26 +241,26 @@ export function UnderwaterScene() {
   return (
     <>
       <SoftShadows size={12} samples={8} focus={0.5} />
-      <color attach="background" args={['#06353a']} />
-      <fog attach="fog" args={['#0a454c', 3.5, 14]} />
+      <color attach="background" args={['#042e34']} />
+      <fog attach="fog" args={['#063840', 3.2, 13]} />
+      <Environment preset="night" environmentIntensity={0.25} />
 
-      <ambientLight intensity={0.25} color="#7ec8c0" />
-      <hemisphereLight args={['#9ef0e0', '#1a3a30', 0.45]} />
+      <ambientLight intensity={0.2} color="#6ec4ba" />
+      <hemisphereLight args={['#a0f0e0', '#143028', 0.4]} />
       <directionalLight
         position={[3, 8, 2]}
-        intensity={0.85}
-        color="#d4fff4"
+        intensity={0.9}
+        color="#d8fff6"
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
       <CausticsLight />
-      <pointLight position={[0, 0.5, 1]} intensity={0.4} color="#4ecdc4" />
+      <pointLight position={[0, 0.4, 1]} intensity={0.45} color="#3ecfc4" />
 
-      {/* 水中ドーム */}
       <mesh>
-        <sphereGeometry args={[18, 24, 24]} />
-        <meshBasicMaterial color="#074046" side={THREE.BackSide} />
+        <sphereGeometry args={[18, 28, 28]} />
+        <meshBasicMaterial color="#05353c" side={THREE.BackSide} />
       </mesh>
 
       <SurfaceShimmer />

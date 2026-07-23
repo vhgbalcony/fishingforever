@@ -13,6 +13,8 @@ import type {
   Season,
   TimeOfDay,
 } from './types'
+import { playerPose } from './playerPose'
+import { computeCastLanding, isNearWater } from './world'
 
 const ENCYCLOPEDIA_KEY = 'fishingforever-encyclopedia'
 
@@ -34,41 +36,44 @@ function saveEncyclopedia(data: Record<string, EncyclopediaEntry>) {
   }
 }
 
+export type CastPoint = { x: number; y: number; z: number }
+
 interface GameState {
   phase: GamePhase
   season: Season
   timeOfDay: TimeOfDay
   locationName: string
 
-  /** 現在ヒット候補／ファイト中の魚種 */
+  /** プレイヤー位置（XZ）、yaw（rad、0=+Z 水向き） */
+  playerX: number
+  playerZ: number
+  playerYaw: number
+  /** ウキ着水点 */
+  castPoint: CastPoint | null
+  nearWater: boolean
+
   activeSpecies: FishSpecies | null
-  /** ウキ沈みからの経過（0〜1 で猶予内） */
   biteProgress: number
-  /** ファイト進捗 0〜1 */
   fightProgress: number
-  /** 直近の釣果 */
   lastCatch: CaughtFish | null
-  /** メッセージ（HUD） */
   message: string
-  /** 図鑑 */
   encyclopedia: Record<string, EncyclopediaEntry>
 
   startGame: () => void
+  setPlayerPose: (x: number, z: number, yaw: number) => void
   cast: () => void
-  /** casting 完了後にウキ待ちへ */
   finishCast: () => void
-  /** アタリ発生（内部／デモ用） */
   triggerBite: () => void
-  /** アワセ入力 */
   tryHook: () => void
   missHook: () => void
-  /** ファイト進行 */
   tickFight: (dt: number) => void
   finishFight: () => void
   dismissResult: () => void
   setBiteProgress: (p: number) => void
   cycleTimeOfDay: () => void
   setMessage: (msg: string) => void
+  /** 移動可能フェーズか */
+  canMove: () => boolean
 }
 
 let biteTimer: ReturnType<typeof setTimeout> | null = null
@@ -81,11 +86,20 @@ function clearTimers() {
   sinkTimer = null
 }
 
+const DEFAULT_X = 0
+const DEFAULT_Z = -5.2
+const DEFAULT_YAW = 0
+
 export const useGameStore = create<GameState>((set, get) => ({
   phase: 'title',
   season: 'spring',
   timeOfDay: 'morning',
   locationName: 'はじまりキャンプ',
+  playerX: DEFAULT_X,
+  playerZ: DEFAULT_Z,
+  playerYaw: DEFAULT_YAW,
+  castPoint: null,
+  nearWater: isNearWater(DEFAULT_Z),
   activeSpecies: null,
   biteProgress: 0,
   fightProgress: 0,
@@ -93,11 +107,24 @@ export const useGameStore = create<GameState>((set, get) => ({
   message: '',
   encyclopedia: loadEncyclopedia(),
 
+  canMove: () => {
+    const p = get().phase
+    return p === 'idle' || p === 'waiting_float'
+  },
+
   startGame: () => {
     clearTimers()
+    playerPose.x = DEFAULT_X
+    playerPose.z = DEFAULT_Z
+    playerPose.yaw = DEFAULT_YAW
     set({
       phase: 'idle',
-      message: 'スペース／クリックでキャスト',
+      playerX: DEFAULT_X,
+      playerZ: DEFAULT_Z,
+      playerYaw: DEFAULT_YAW,
+      castPoint: null,
+      nearWater: isNearWater(DEFAULT_Z),
+      message: 'WASDで移動。水際でスペース／キャスト',
       activeSpecies: null,
       lastCatch: null,
       fightProgress: 0,
@@ -105,12 +132,49 @@ export const useGameStore = create<GameState>((set, get) => ({
     })
   },
 
+  setPlayerPose: (x, z, yaw) => {
+    playerPose.x = x
+    playerPose.z = z
+    playerPose.yaw = yaw
+    const near = isNearWater(z)
+    const { phase, nearWater } = get()
+    // 位置は毎フレーム変えず、水際フラグとメッセージだけ React に通知
+    if (near === nearWater && Math.abs(get().playerX - x) < 0.5) {
+      // たまに同期（他UI用）
+      if (Math.random() > 0.95) set({ playerX: x, playerZ: z, playerYaw: yaw })
+      return
+    }
+    const patch: Partial<GameState> = {
+      playerX: x,
+      playerZ: z,
+      playerYaw: yaw,
+      nearWater: near,
+    }
+    if (phase === 'idle' && near !== nearWater) {
+      patch.message = near
+        ? '水際だ。スペースかボタンでキャスト'
+        : 'WASDで移動。水際まで歩いてキャスト'
+    }
+    set(patch)
+  },
+
   cast: () => {
-    const { phase } = get()
+    const { phase, nearWater } = get()
     if (phase !== 'idle') return
+    if (!nearWater) {
+      set({ message: 'もっと水際に近づいてからキャストして' })
+      return
+    }
     clearTimers()
+    const landing = computeCastLanding(
+      playerPose.x,
+      playerPose.z,
+      playerPose.yaw,
+      0.65 + Math.random() * 0.25,
+    )
     set({
       phase: 'casting',
+      castPoint: landing,
       message: 'キャスト…',
       activeSpecies: null,
       biteProgress: 0,
@@ -122,9 +186,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (get().phase !== 'casting') return
     set({
       phase: 'waiting_float',
-      message: 'ウキを注視して… アタリを待て',
+      message: 'ウキを注視して… アタリを待て（WASDで移動可）',
     })
-    // 2〜5 秒後にアタリ
     const delay = 2000 + Math.random() * 3000
     biteTimer = setTimeout(() => {
       get().triggerBite()
@@ -140,7 +203,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       biteProgress: 0,
       message: `アタリ！ ${species.name}か…？ 今だ、アワセろ！`,
     })
-    // 猶予超過でミス
     sinkTimer = setTimeout(() => {
       if (get().phase === 'float_sinking') get().missHook()
     }, species.hookWindowSec * 1000)
@@ -150,7 +212,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     const { phase, activeSpecies, biteProgress } = get()
     if (phase !== 'float_sinking' || !activeSpecies) return
     clearTimers()
-    // 沈み始め直後は少し甘い／終盤も可（MVPはほぼ成功寄り）
     if (biteProgress < 0.08) {
       set({
         phase: 'waiting_float',
@@ -174,9 +235,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     clearTimers()
     set({
       phase: 'idle',
-      message: '逃した… もう一度キャストしよう',
+      message: '逃した… 場所を変えて再キャストもアリ',
       activeSpecies: null,
       biteProgress: 0,
+      castPoint: null,
     })
   },
 
@@ -223,11 +285,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   dismissResult: () => {
     set({
       phase: 'idle',
-      message: 'スペース／クリックでキャスト',
+      message: 'WASDで移動。水際でスペース／キャスト',
       activeSpecies: null,
       lastCatch: null,
       fightProgress: 0,
       biteProgress: 0,
+      castPoint: null,
     })
   },
 
