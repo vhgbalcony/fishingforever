@@ -11,11 +11,11 @@ function CameraRig({ underwater }: { underwater: boolean }) {
   const { camera } = useThree()
   useEffect(() => {
     if (underwater) {
-      camera.position.set(0, 0.4, 3.2)
-      camera.lookAt(0, 0, 0)
+      camera.position.set(0.2, 0.35, 3.4)
+      camera.lookAt(0, -0.1, -0.5)
     } else {
-      camera.position.set(0, 3.2, 7.5)
-      camera.lookAt(0, 0.5, 0)
+      camera.position.set(0.4, 3.5, 8.2)
+      camera.lookAt(0, 0.4, 0.5)
     }
   }, [underwater, camera])
   return null
@@ -29,8 +29,13 @@ function GameCanvas() {
   return (
     <Canvas
       shadows
-      camera={{ position: [0, 3.2, 7.5], fov: 50, near: 0.1, far: 80 }}
+      camera={{ position: [0, 3.4, 8.2], fov: 48, near: 0.1, far: 90 }}
       dpr={[1, 1.75]}
+      gl={{
+        antialias: true,
+        toneMapping: 4 /* THREE.ACESFilmicToneMapping */,
+        toneMappingExposure: 1.05,
+      }}
     >
       <CameraRig underwater={underwater} />
       <Suspense fallback={null}>
