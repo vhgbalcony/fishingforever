@@ -1,54 +1,57 @@
-/** アイソメ風マップ座標（画面%）。原点は左上、Y が大きいほど手前（下） */
+/** アイソメ風マップ座標（画面% = マップ全体の %）。原点は左上、Y が大きいほど手前 */
 
 export type StreamZone = 'upper' | 'middle' | 'lower'
 
 export type Point = { x: number; y: number }
 
 /**
- * bg-iso-camp 想定レイアウト:
- * - 上流: 左上の滝・狭い谷
- * - 中流: 中央の橋まわり
- * - 下流: 右下の広い砂利浜
- * - 歩行: テント周りの草原〜川沿いの砂利
+ * bg-iso-camp（広いマップ）想定:
+ * - 上流: 左上の滝
+ * - 中流: アーチ橋2本で対岸へ
+ * - 下流: 右下の砂利浜
+ * - 歩行: 両岸の草原＋橋。川本体は歩けない
  */
 export const MAP = {
-  walkMinX: 18,
-  walkMaxX: 72,
-  walkMinY: 38,
-  walkMaxY: 86,
-  playerSpeed: 24,
-  /** 川からの距離がこの以内なら「水際」 */
-  shoreDistance: 16,
-  castMaxDist: 28,
+  /** マップ全体の歩行外枠（森の端まで探索） */
+  walkMinX: 6,
+  walkMaxX: 94,
+  walkMinY: 10,
+  walkMaxY: 92,
+  playerSpeed: 22,
+  /** ビューに対するマップ拡大率（大きいほどスクロール探索感） */
+  mapScale: 1.65,
+  shoreDistance: 14,
+  castMaxDist: 26,
   castMinDist: 5,
   water: {
-    /** 上流→下流の中心線 */
     spine: [
-      { x: 22, y: 20 },
-      { x: 30, y: 28 },
-      { x: 38, y: 36 },
-      { x: 48, y: 44 },
-      { x: 58, y: 54 },
-      { x: 70, y: 66 },
-      { x: 82, y: 78 },
+      { x: 16, y: 16 },
+      { x: 24, y: 24 },
+      { x: 34, y: 34 },
+      { x: 44, y: 42 },
+      { x: 54, y: 52 },
+      { x: 64, y: 60 },
+      { x: 74, y: 70 },
+      { x: 86, y: 82 },
     ] as Point[],
-    halfWidth: 10,
+    /** 川幅（これ以内は水域＝歩行不可。橋は例外） */
+    halfWidth: 7.2,
   },
-  /** スポーン（テント前） */
-  spawn: { x: 40, y: 62 } as Point,
+  /**
+   * 橋の歩行帯（川をまたぐ廊下）。
+   * 中心 + 半径でカプセル近似
+   */
+  bridges: [
+    { x: 40, y: 37, radius: 7.5 }, // 上流寄りアーチ橋
+    { x: 62, y: 56, radius: 7.5 }, // 下流寄りアーチ橋
+  ] as { x: number; y: number; radius: number }[],
+  spawn: { x: 28, y: 68 } as Point,
 } as const
 
 export const ZONE_LABEL: Record<StreamZone, string> = {
   upper: '上流',
   middle: '中流',
   lower: '下流',
-}
-
-export function clampWalk(x: number, y: number): Point {
-  return {
-    x: Math.min(MAP.walkMaxX, Math.max(MAP.walkMinX, x)),
-    y: Math.min(MAP.walkMaxY, Math.max(MAP.walkMinY, y)),
-  }
 }
 
 function dist(a: Point, b: Point): number {
@@ -88,15 +91,72 @@ export function nearestOnRiver(p: Point): {
   return best
 }
 
+export function isOnBridge(p: Point): boolean {
+  for (const b of MAP.bridges) {
+    if (dist(p, { x: b.x, y: b.y }) <= b.radius) return true
+  }
+  return false
+}
+
 export function isInWater(p: Point): boolean {
+  if (isOnBridge(p)) return false
   return nearestOnRiver(p).distance <= MAP.water.halfWidth
 }
 
-/** 水際（歩行帯のうち川に近い） */
+/** 歩行可能か（外枠内・川でない or 橋） */
+export function isWalkable(p: Point): boolean {
+  if (
+    p.x < MAP.walkMinX ||
+    p.x > MAP.walkMaxX ||
+    p.y < MAP.walkMinY ||
+    p.y > MAP.walkMaxY
+  ) {
+    return false
+  }
+  if (isOnBridge(p)) return true
+  if (nearestOnRiver(p).distance <= MAP.water.halfWidth) return false
+  return true
+}
+
+/**
+ * 移動先を歩行ルールでクランプ。
+ * 川には入れない（橋以外）。軸スライドで壁すり抜け感を軽減。
+ */
+export function clampWalk(x: number, y: number, from?: Point): Point {
+  const target = {
+    x: Math.min(MAP.walkMaxX, Math.max(MAP.walkMinX, x)),
+    y: Math.min(MAP.walkMaxY, Math.max(MAP.walkMinY, y)),
+  }
+  if (isWalkable(target)) return target
+  if (from) {
+    const onlyX = { x: target.x, y: from.y }
+    if (isWalkable(onlyX)) return onlyX
+    const onlyY = { x: from.x, y: target.y }
+    if (isWalkable(onlyY)) return onlyY
+    return from
+  }
+  // from なし: 水から押し出す
+  if (isInWater(target) || nearestOnRiver(target).distance <= MAP.water.halfWidth) {
+    const n = nearestOnRiver(target)
+    const dx = target.x - n.point.x
+    const dy = target.y - n.point.y
+    const len = Math.hypot(dx, dy) || 1
+    const push = MAP.water.halfWidth + 1.2
+    const out = {
+      x: n.point.x + (dx / len) * push,
+      y: n.point.y + (dy / len) * push,
+    }
+    if (isWalkable(out)) return out
+  }
+  return target
+}
+
+/** 水際（岸からキャスト可能）。橋の上からも可 */
 export function isNearWater(p: Point): boolean {
+  if (isOnBridge(p)) return true
   const { distance } = nearestOnRiver(p)
   return (
-    distance <= MAP.shoreDistance && distance >= MAP.water.halfWidth * 0.25
+    distance <= MAP.shoreDistance && distance >= MAP.water.halfWidth * 0.35
   )
 }
 
@@ -108,7 +168,10 @@ export function getStreamZone(p: Point): StreamZone {
 }
 
 export function canCastTo(from: Point, target: Point): boolean {
-  if (!isInWater(target)) return false
+  // 着水は「水」のみ（橋の上は着水不可）
+  const river = nearestOnRiver(target)
+  if (river.distance > MAP.water.halfWidth) return false
+  if (isOnBridge(target)) return false
   if (!isNearWater(from)) return false
   const d = dist(from, target)
   return d >= MAP.castMinDist && d <= MAP.castMaxDist
@@ -116,11 +179,17 @@ export function canCastTo(from: Point, target: Point): boolean {
 
 export function clampCastTarget(from: Point, target: Point): Point {
   let { x, y } = target
+  // 橋の上なら川心へ押し出す
+  if (isOnBridge({ x, y })) {
+    const n = nearestOnRiver({ x, y })
+    x = n.point.x
+    y = n.point.y
+  }
   const near = nearestOnRiver({ x, y })
   if (near.distance > MAP.water.halfWidth) {
     const pull = MAP.water.halfWidth / (near.distance || 1)
-    x = near.point.x + (x - near.point.x) * pull * 0.9
-    y = near.point.y + (y - near.point.y) * pull * 0.9
+    x = near.point.x + (x - near.point.x) * pull * 0.85
+    y = near.point.y + (y - near.point.y) * pull * 0.85
   }
   const d = dist(from, { x, y })
   if (d > MAP.castMaxDist && d > 0.01) {

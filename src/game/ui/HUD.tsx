@@ -71,7 +71,7 @@ export function HUD() {
           <p className="title-kicker">清流の釣り体験</p>
           <h1>Fishingforever</h1>
           <p className="title-sub">
-            はじまりキャンプ — アイソメ視点で歩いて、好きな場所へキャスト
+            はじまりキャンプ — 広いマップを探索し、橋を渡って好きな岸からキャスト
           </p>
           <ArtStylePicker />
           <p className="style-preview-hint">
@@ -82,7 +82,7 @@ export function HUD() {
             釣りをはじめる
           </button>
           <p className="hint">
-            WASD 移動 ／ 川をクリックで狙い＆キャスト ／ スペースでもキャスト
+            WASD 移動（川は橋のみ横断）／ 岸で川クリック or スペースでキャスト
           </p>
         </div>
       </div>

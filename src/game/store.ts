@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import type { ArtStyle } from './artAssets'
 import {
   estimateWeightG,
+  fishDisplayScale,
+  getLifeStage,
   getSpecies,
   pickRandomSpecies,
   rollLengthCm,
@@ -18,6 +20,7 @@ import { playerPose } from './playerPose'
 import {
   canCastTo,
   clampCastTarget,
+  clampWalk,
   defaultAim,
   getStreamZone,
   isNearWater,
@@ -77,16 +80,18 @@ interface GameState {
   playerX: number
   playerY: number
   facingRight: boolean
-  /** キャスト狙い位置（水上） */
   aimX: number
   aimY: number
   castPoint: CastPoint | null
   nearWater: boolean
-  /** 狙い／着水のゾーン */
   aimZone: StreamZone
   castZone: StreamZone | null
 
   activeSpecies: FishSpecies | null
+  /** ヒット確定時に抽選した体長（水中サイズ表示用） */
+  pendingLengthCm: number | null
+  /** 表示スケール 0.4〜1.45 */
+  pendingFishScale: number
   biteProgress: number
   fightProgress: number
   lastCatch: CaughtFish | null
@@ -105,6 +110,8 @@ interface GameState {
   missHook: () => void
   tickFight: (dt: number) => void
   finishFight: () => void
+  keepCatch: () => void
+  releaseCatch: () => void
   dismissResult: () => void
   setBiteProgress: (p: number) => void
   cycleTimeOfDay: () => void
@@ -126,6 +133,20 @@ function clearTimers() {
 const DEFAULT = MAP.spawn
 const initialAim = defaultAim(DEFAULT)
 
+function registerEncyclopedia(
+  encyclopedia: Record<string, EncyclopediaEntry>,
+  catchData: CaughtFish,
+): Record<string, EncyclopediaEntry> {
+  const prev = encyclopedia[catchData.speciesId]
+  const entry: EncyclopediaEntry = {
+    speciesId: catchData.speciesId,
+    timesCaught: (prev?.timesCaught ?? 0) + 1,
+    maxLengthCm: Math.max(prev?.maxLengthCm ?? 0, catchData.lengthCm),
+    firstCaughtAt: prev?.firstCaughtAt ?? Date.now(),
+  }
+  return { ...encyclopedia, [catchData.speciesId]: entry }
+}
+
 export const useGameStore = create<GameState>((set, get) => ({
   phase: 'title',
   season: 'spring',
@@ -141,6 +162,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   aimZone: getStreamZone(initialAim),
   castZone: null,
   activeSpecies: null,
+  pendingLengthCm: null,
+  pendingFishScale: 1,
   biteProgress: 0,
   fightProgress: 0,
   lastCatch: null,
@@ -155,24 +178,27 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   startGame: () => {
     clearTimers()
-    playerPose.x = DEFAULT.x
-    playerPose.y = DEFAULT.y
+    const spawn = clampWalk(DEFAULT.x, DEFAULT.y)
+    playerPose.x = spawn.x
+    playerPose.y = spawn.y
     playerPose.facingRight = true
-    const aim = defaultAim(DEFAULT)
+    const aim = defaultAim(spawn)
     set({
       phase: 'idle',
-      playerX: DEFAULT.x,
-      playerY: DEFAULT.y,
+      playerX: spawn.x,
+      playerY: spawn.y,
       facingRight: true,
       aimX: aim.x,
       aimY: aim.y,
       aimZone: getStreamZone(aim),
       castPoint: null,
       castZone: null,
-      nearWater: isNearWater(DEFAULT),
+      nearWater: isNearWater(spawn),
       message:
-        'WASDで移動。水際で川をクリックして狙い、スペースでキャスト',
+        '広いキャンプを探索。川は橋で渡れる。水際でクリック／スペースでキャスト',
       activeSpecies: null,
+      pendingLengthCm: null,
+      pendingFishScale: 1,
       lastCatch: null,
       fightProgress: 0,
       biteProgress: 0,
@@ -201,17 +227,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     if (phase === 'idle' && near !== nearWater) {
       patch.message = near
-        ? `水際だ（${ZONE_LABEL[aimZone]}を狙える）。川をクリック／スペースでキャスト`
-        : 'WASDで移動。川沿いまで歩いて狙いをつけよう'
+        ? `水際（${ZONE_LABEL[aimZone]}）。川をクリックで狙いキャスト`
+        : '川は泳げないよ。対岸は橋を渡って。岸沿いで釣り'
     }
     set(patch)
   },
 
   setAim: (x, y) => {
     const from = { x: playerPose.x, y: playerPose.y }
-    if (!isNearWater(from) && get().phase === 'idle') {
-      // 水際以外では狙いだけ記憶（着水はクランプ）
-    }
     const aim = clampCastTarget(from, { x, y })
     set({
       aimX: aim.x,
@@ -243,6 +266,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       castZone: zone,
       message: `${ZONE_LABEL[zone]}へキャスト…`,
       activeSpecies: null,
+      pendingLengthCm: null,
+      pendingFishScale: 1,
       biteProgress: 0,
       fightProgress: 0,
     })
@@ -282,7 +307,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       phase: 'float_sinking',
       activeSpecies: species,
       biteProgress: 0,
-      // ネタバレ防止: 名前は出さない
       message: 'アタリ！！ 今だ、アワセろ！',
     })
     sinkTimer = setTimeout(() => {
@@ -305,11 +329,16 @@ export const useGameStore = create<GameState>((set, get) => ({
       biteTimer = setTimeout(() => get().triggerBite(), delay)
       return
     }
+    const lengthCm = rollLengthCm(activeSpecies)
+    const scale = fishDisplayScale(activeSpecies, lengthCm)
+    const sizeHint =
+      scale < 0.7 ? '小さめの引き…' : scale > 1.15 ? 'ずしり重い！' : '引きを楽しもう…'
     set({
       phase: 'underwater_fight',
       fightProgress: 0,
-      // ネタバレ防止: 種名は釣果まで伏せる
-      message: '掛かった！ 引きを楽しもう…',
+      pendingLengthCm: lengthCm,
+      pendingFishScale: scale,
+      message: `掛かった！ ${sizeHint}`,
     })
   },
 
@@ -320,6 +349,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       phase: 'idle',
       message: '逃した… 場所や狙いを変えて再キャストもアリ',
       activeSpecies: null,
+      pendingLengthCm: null,
+      pendingFishScale: 1,
       biteProgress: 0,
       castPoint: null,
       castZone: null,
@@ -335,44 +366,45 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   finishFight: () => {
-    const { activeSpecies, encyclopedia } = get()
+    const { activeSpecies, pendingLengthCm } = get()
     if (!activeSpecies) return
-    const lengthCm = rollLengthCm(activeSpecies)
+    const lengthCm = pendingLengthCm ?? rollLengthCm(activeSpecies)
     const weightG = estimateWeightG(lengthCm, activeSpecies.weightFactor)
+    const lifeStage = getLifeStage(activeSpecies, lengthCm)
     const catchData: CaughtFish = {
       speciesId: activeSpecies.id,
       name: activeSpecies.name,
       lengthCm,
       weightG,
+      lifeStage,
       caughtAt: Date.now(),
     }
-
-    const prev = encyclopedia[activeSpecies.id]
-    const entry: EncyclopediaEntry = {
-      speciesId: activeSpecies.id,
-      timesCaught: (prev?.timesCaught ?? 0) + 1,
-      maxLengthCm: Math.max(prev?.maxLengthCm ?? 0, lengthCm),
-      firstCaughtAt: prev?.firstCaughtAt ?? Date.now(),
-    }
-    const nextEnc = { ...encyclopedia, [activeSpecies.id]: entry }
-    saveEncyclopedia(nextEnc)
 
     set({
       phase: 'catch_result',
       lastCatch: catchData,
-      encyclopedia: nextEnc,
-      message: 'やった！',
+      message: '釣り上げた！',
       fightProgress: 1,
     })
   },
 
-  dismissResult: () => {
+  keepCatch: () => {
+    const { lastCatch, encyclopedia } = get()
+    if (!lastCatch) return
+    const nextEnc = registerEncyclopedia(encyclopedia, lastCatch)
+    saveEncyclopedia(nextEnc)
     const aim = defaultAim({ x: playerPose.x, y: playerPose.y })
     set({
       phase: 'idle',
-      message: 'WASDで移動。水際で川をクリック／スペースでキャスト',
+      encyclopedia: nextEnc,
+      message:
+        lastCatch.lifeStage === 'juvenile'
+          ? 'キープした。幼魚はリリース推奨だよ'
+          : '図鑑に記録した！ WASDで探索',
       activeSpecies: null,
       lastCatch: null,
+      pendingLengthCm: null,
+      pendingFishScale: 1,
       fightProgress: 0,
       biteProgress: 0,
       castPoint: null,
@@ -381,6 +413,36 @@ export const useGameStore = create<GameState>((set, get) => ({
       aimY: aim.y,
       aimZone: getStreamZone(aim),
     })
+  },
+
+  releaseCatch: () => {
+    const { lastCatch } = get()
+    if (!lastCatch) return
+    const aim = defaultAim({ x: playerPose.x, y: playerPose.y })
+    const note =
+      lastCatch.lifeStage === 'juvenile'
+        ? '幼魚をリリースした。また大きくなってね'
+        : `${lastCatch.name}をリリースした`
+    set({
+      phase: 'idle',
+      message: note,
+      activeSpecies: null,
+      lastCatch: null,
+      pendingLengthCm: null,
+      pendingFishScale: 1,
+      fightProgress: 0,
+      biteProgress: 0,
+      castPoint: null,
+      castZone: null,
+      aimX: aim.x,
+      aimY: aim.y,
+      aimZone: getStreamZone(aim),
+    })
+  },
+
+  dismissResult: () => {
+    // 互換: スペースはキープ扱い
+    get().keepCatch()
   },
 
   setBiteProgress: (p: number) => set({ biteProgress: p }),

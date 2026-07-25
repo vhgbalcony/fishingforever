@@ -1,5 +1,5 @@
 import { fishArt } from '../artAssets'
-import { getSpecies } from '../fishData'
+import { fishDisplayScale, getSpecies, LIFE_STAGE_LABEL } from '../fishData'
 import { useGameStore } from '../store'
 
 export function CatchResult() {
@@ -7,21 +7,31 @@ export function CatchResult() {
   const lastCatch = useGameStore((s) => s.lastCatch)
   const encyclopedia = useGameStore((s) => s.encyclopedia)
   const artStyle = useGameStore((s) => s.artStyle)
-  const dismissResult = useGameStore((s) => s.dismissResult)
+  const keepCatch = useGameStore((s) => s.keepCatch)
+  const releaseCatch = useGameStore((s) => s.releaseCatch)
 
   if (phase !== 'catch_result' || !lastCatch) return null
 
   const species = getSpecies(lastCatch.speciesId)
   const entry = encyclopedia[lastCatch.speciesId]
-  const isNewRecord =
-    entry && entry.timesCaught > 0 && entry.maxLengthCm === lastCatch.lengthCm
-  const isFirst = entry?.timesCaught === 1
+  const wouldBeFirst = !entry || entry.timesCaught === 0
+  const wouldBeRecord =
+    entry && lastCatch.lengthCm > (entry.maxLengthCm ?? 0)
+  const scale = species
+    ? fishDisplayScale(species, lastCatch.lengthCm)
+    : 1
+  const stage = lastCatch.lifeStage
+  const stageClass =
+    stage === 'juvenile' ? 'stage-juvenile' : stage === 'trophy' ? 'stage-trophy' : 'stage-adult'
 
   return (
     <div className="overlay result-screen">
       <div className="result-card">
         <p className="result-kicker">GET!</p>
         <h2>{lastCatch.name}</h2>
+        <p className={`life-stage-badge ${stageClass}`}>
+          {LIFE_STAGE_LABEL[stage]}
+        </p>
 
         <div
           className={`fish-preview illustrated${artStyle === 'pixel' ? ' pixel' : ''}`}
@@ -34,6 +44,10 @@ export function CatchResult() {
             src={fishArt(lastCatch.speciesId, artStyle)}
             alt={lastCatch.name}
             draggable={false}
+            style={{
+              transform: `scale(${scale})`,
+              transformOrigin: 'center center',
+            }}
           />
         </div>
 
@@ -52,15 +66,29 @@ export function CatchResult() {
           </div>
         </div>
 
-        {isFirst && <p className="badge">図鑑 初登録！</p>}
-        {isNewRecord && !isFirst && <p className="badge">自己最長！</p>}
-        <p className="hint" style={{ marginBottom: '0.75rem' }}>
-          正体がわかった！
-        </p>
+        {wouldBeFirst && (
+          <p className="badge">キープすると図鑑 初登録！</p>
+        )}
+        {wouldBeRecord && !wouldBeFirst && (
+          <p className="badge">キープで自己最長更新！</p>
+        )}
+        {stage === 'juvenile' && (
+          <p className="release-hint">
+            幼魚だよ。資源のためリリースがおすすめ
+          </p>
+        )}
+        {stage === 'trophy' && (
+          <p className="release-hint trophy">大物！ 図鑑に残す？</p>
+        )}
 
-        <button type="button" className="btn primary" onClick={dismissResult}>
-          岸に戻る
-        </button>
+        <div className="result-actions">
+          <button type="button" className="btn primary" onClick={keepCatch}>
+            キープする
+          </button>
+          <button type="button" className="btn ghost" onClick={releaseCatch}>
+            リリースする
+          </button>
+        </div>
       </div>
     </div>
   )

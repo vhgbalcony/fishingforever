@@ -1,7 +1,7 @@
 import type { StreamZone } from './world'
-import type { FishSpecies } from './types'
+import type { FishSpecies, LifeStage } from './types'
 
-/** はじまりキャンプ — 第1弾の清流魚（アユは後回し、イワナは渓流マップ用に除外） */
+/** はじまりキャンプ — 第1弾の清流魚 */
 export const FISH_SPECIES: FishSpecies[] = [
   {
     id: 'yamame',
@@ -13,6 +13,8 @@ export const FISH_SPECIES: FishSpecies[] = [
     fightSec: 8,
     color: '#c4a35a',
     accentColor: '#5c4030',
+    /** これ未満は幼魚扱い */
+    juvenileMaxCm: 14,
   },
   {
     id: 'amago',
@@ -24,6 +26,7 @@ export const FISH_SPECIES: FishSpecies[] = [
     fightSec: 7.5,
     color: '#d4a574',
     accentColor: '#8b4513',
+    juvenileMaxCm: 13,
   },
   {
     id: 'nijimasu',
@@ -35,6 +38,7 @@ export const FISH_SPECIES: FishSpecies[] = [
     fightSec: 10,
     color: '#7ec8a3',
     accentColor: '#e85d75',
+    juvenileMaxCm: 16,
   },
   {
     id: 'oikawa',
@@ -46,6 +50,7 @@ export const FISH_SPECIES: FishSpecies[] = [
     fightSec: 5,
     color: '#6eb5ff',
     accentColor: '#ff6b9d',
+    juvenileMaxCm: 7,
   },
   {
     id: 'ugui',
@@ -57,6 +62,7 @@ export const FISH_SPECIES: FishSpecies[] = [
     fightSec: 6,
     color: '#a8b5c4',
     accentColor: '#f0a0a0',
+    juvenileMaxCm: 11,
   },
   {
     id: 'kajika',
@@ -68,13 +74,10 @@ export const FISH_SPECIES: FishSpecies[] = [
     fightSec: 5.5,
     color: '#6b5b4f',
     accentColor: '#3d3530',
+    juvenileMaxCm: 6,
   },
 ]
 
-/**
- * ゾーン別出現ウェイト（相対値）。
- * 上流: ヤマメ・アマゴ寄り / 中流: バランス / 下流: オイカワ・ウグイ寄り
- */
 export const ZONE_WEIGHTS: Record<StreamZone, Record<string, number>> = {
   upper: {
     yamame: 34,
@@ -102,6 +105,12 @@ export const ZONE_WEIGHTS: Record<StreamZone, Record<string, number>> = {
   },
 }
 
+export const LIFE_STAGE_LABEL: Record<LifeStage, string> = {
+  juvenile: '幼魚',
+  adult: '成魚',
+  trophy: '大物',
+}
+
 export function getSpecies(id: string): FishSpecies | undefined {
   return FISH_SPECIES.find((f) => f.id === id)
 }
@@ -114,7 +123,28 @@ export function estimateWeightG(lengthCm: number, weightFactor: number): number 
 export function rollLengthCm(species: FishSpecies): number {
   const t = (Math.random() + Math.random() + Math.random()) / 3
   const delta = (t - 0.5) * 2 * species.lengthVariance
-  return Math.round((species.avgLengthCm + delta) * 10) / 10
+  const raw = species.avgLengthCm + delta
+  // たまに一回り大きい個体
+  const big = Math.random() < 0.08 ? 1.15 + Math.random() * 0.2 : 1
+  return Math.round(raw * big * 10) / 10
+}
+
+export function getLifeStage(
+  species: FishSpecies,
+  lengthCm: number,
+): LifeStage {
+  if (lengthCm < species.juvenileMaxCm) return 'juvenile'
+  if (lengthCm >= species.avgLengthCm * 1.25) return 'trophy'
+  return 'adult'
+}
+
+/** 平均に対する表示スケール（水中・釣果） */
+export function fishDisplayScale(
+  species: FishSpecies,
+  lengthCm: number,
+): number {
+  const ratio = lengthCm / species.avgLengthCm
+  return Math.min(1.45, Math.max(0.42, ratio))
 }
 
 export function pickRandomSpecies(zone: StreamZone = 'middle'): FishSpecies {

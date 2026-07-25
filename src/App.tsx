@@ -19,7 +19,7 @@ function useInputBindings() {
       if (phase === 'title') startGame()
       else if (phase === 'idle') cast()
       else if (phase === 'float_sinking') tryHook()
-      else if (phase === 'catch_result') dismissResult()
+      else if (phase === 'catch_result') dismissResult() // キープ
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

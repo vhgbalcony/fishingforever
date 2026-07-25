@@ -1,14 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { fishArt, getArt } from '../artAssets'
 import { playerPose } from '../playerPose'
 import { useGameStore } from '../store'
-import {
-  clampWalk,
-  defaultAim,
-  isNearWater,
-  MAP,
-  ZONE_LABEL,
-} from '../world'
+import { clampWalk, MAP, ZONE_LABEL } from '../world'
+
+const MAP_SCALE = MAP.mapScale
 
 function ShoreHint() {
   const nearWater = useGameStore((s) => s.nearWater)
@@ -54,6 +50,7 @@ export function Scene2D() {
   const aimX = useGameStore((s) => s.aimX)
   const aimY = useGameStore((s) => s.aimY)
   const nearWater = useGameStore((s) => s.nearWater)
+  const pendingFishScale = useGameStore((s) => s.pendingFishScale)
   const setPlayerPose = useGameStore((s) => s.setPlayerPose)
   const setAim = useGameStore((s) => s.setAim)
   const castAt = useGameStore((s) => s.castAt)
@@ -103,11 +100,12 @@ export function Scene2D() {
     return () => clearTimeout(t)
   }, [phase, finishCast])
 
-  // ポインタ → マップ%
+  // ポインタ → マップ%（拡大スクロール後の world 矩形基準）
   const clientToMap = (clientX: number, clientY: number) => {
-    const el = worldRef.current ?? rootRef.current
+    const el = worldRef.current
     if (!el) return null
     const rect = el.getBoundingClientRect()
+    if (rect.width < 1 || rect.height < 1) return null
     const x = ((clientX - rect.left) / rect.width) * 100
     const y = ((clientY - rect.top) / rect.height) * 100
     return { x, y }
@@ -166,43 +164,40 @@ export function Scene2D() {
           const len = Math.hypot(dx, dy) || 1
           dx = (dx / len) * MAP.playerSpeed * dt
           dy = (dy / len) * MAP.playerSpeed * dt
-          const next = clampWalk(playerPose.x + dx, playerPose.y + dy)
+          const from = { x: playerPose.x, y: playerPose.y }
+          const next = clampWalk(
+            playerPose.x + dx,
+            playerPose.y + dy,
+            from,
+          )
           const facing =
             dx > 0.01 ? true : dx < -0.01 ? false : playerPose.facingRight
           playerPose.x = next.x
           playerPose.y = next.y
           playerPose.facingRight = facing
           setPlayerPose(next.x, next.y, facing)
-          // 移動中もデフォルト狙いを川へ
-          if (state.phase === 'idle' && isNearWater(next)) {
-            const aim = defaultAim(next)
-            if (
-              Math.hypot(aim.x - state.aimX, aim.y - state.aimY) > 18
-            ) {
-              // 遠いときだけ自動補正（手動狙いを尊重）
-            }
-          }
         }
       }
 
-      // カメラ追従（マップを広く見せる）
-      const targetCamX = (playerPose.x - 50) * 0.35
-      const targetCamY = (playerPose.y - 55) * 0.28
-      camRef.current.x += (targetCamX - camRef.current.x) * 0.1
-      camRef.current.y += (targetCamY - camRef.current.y) * 0.1
+      // カメラ: プレイヤーを画面中央付近に据えてマップをスクロール
+      const targetCamX = playerPose.x
+      const targetCamY = playerPose.y
+      camRef.current.x += (targetCamX - camRef.current.x) * 0.12
+      camRef.current.y += (targetCamY - camRef.current.y) * 0.12
       if (rootRef.current) {
         rootRef.current.style.setProperty(
-          '--cam-x',
-          `${camRef.current.x.toFixed(2)}%`,
+          '--px',
+          camRef.current.x.toFixed(2),
         )
         rootRef.current.style.setProperty(
-          '--cam-y',
-          `${camRef.current.y.toFixed(2)}%`,
+          '--py',
+          camRef.current.y.toFixed(2),
         )
+        rootRef.current.style.setProperty('--map-scale', String(MAP_SCALE))
       }
 
       if (playerEl.current && !underwater) {
-        const scale = 0.55 + playerPose.y * 0.0045
+        const scale = 0.48 + playerPose.y * 0.0035
         playerEl.current.style.left = `${playerPose.x}%`
         playerEl.current.style.top = `${playerPose.y}%`
         playerEl.current.style.transform = `translate(-50%, -85%) scaleX(${
@@ -260,6 +255,11 @@ export function Scene2D() {
             src={fishArt(activeSpecies.id, artStyle)}
             alt="掛かった魚"
             draggable={false}
+            style={
+              {
+                ['--fish-scale']: String(pendingFishScale),
+              } as CSSProperties
+            }
           />
         )}
         <div className="bubble b1" />

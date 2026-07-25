@@ -12,6 +12,8 @@ export type TimeOfDay = 'morning' | 'day' | 'evening'
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter'
 
+export type LifeStage = 'juvenile' | 'adult' | 'trophy'
+
 export interface FishSpecies {
   id: string
   name: string
@@ -27,6 +29,8 @@ export interface FishSpecies {
   fightSec: number
   color: string
   accentColor: string
+  /** これ未満は幼魚 */
+  juvenileMaxCm: number
 }
 
 export interface CaughtFish {
@@ -34,7 +38,10 @@ export interface CaughtFish {
   name: string
   lengthCm: number
   weightG: number
+  lifeStage: LifeStage
   caughtAt: number
+  /** リリースしたか（記録用） */
+  released?: boolean
 }
 
 export interface EncyclopediaEntry {
