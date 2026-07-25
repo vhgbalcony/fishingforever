@@ -37,7 +37,7 @@ export function HUD() {
           <p className="title-kicker">清流の釣り体験</p>
           <h1>Fishingforever</h1>
           <p className="title-sub">
-            はじまりキャンプ — 歩いて、好きな場所からキャスト
+            はじまりキャンプ — イラスト2.5Dで歩いてキャスト
           </p>
           <button type="button" className="btn primary" onClick={startGame}>
             釣りをはじめる

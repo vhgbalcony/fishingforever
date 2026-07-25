@@ -1,3 +1,4 @@
+import { fishArt } from '../artAssets'
 import { getSpecies } from '../fishData'
 import { useGameStore } from '../store'
 
@@ -22,13 +23,17 @@ export function CatchResult() {
         <h2>{lastCatch.name}</h2>
 
         <div
-          className="fish-preview"
+          className="fish-preview illustrated"
           style={{
-            background: `radial-gradient(circle at 30% 30%, ${species?.accentColor ?? '#fff'}44, ${species?.color ?? '#888'}cc)`,
+            background: `radial-gradient(circle at 30% 30%, ${species?.accentColor ?? '#fff'}33, ${species?.color ?? '#888'}55)`,
           }}
         >
-          <div className="fish-silhouette" style={{ background: species?.color }} />
-          <div className="fish-shine" />
+          <img
+            className="fish-art"
+            src={fishArt(lastCatch.speciesId)}
+            alt={lastCatch.name}
+            draggable={false}
+          />
         </div>
 
         <div className="stats">

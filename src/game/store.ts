@@ -36,7 +36,7 @@ function saveEncyclopedia(data: Record<string, EncyclopediaEntry>) {
   }
 }
 
-export type CastPoint = { x: number; y: number; z: number }
+export type CastPoint = { x: number; y: number }
 
 interface GameState {
   phase: GamePhase
@@ -44,11 +44,10 @@ interface GameState {
   timeOfDay: TimeOfDay
   locationName: string
 
-  /** プレイヤー位置（XZ）、yaw（rad、0=+Z 水向き） */
+  /** プレイヤー位置（画面%）、向き */
   playerX: number
-  playerZ: number
-  playerYaw: number
-  /** ウキ着水点 */
+  playerY: number
+  facingRight: boolean
   castPoint: CastPoint | null
   nearWater: boolean
 
@@ -60,7 +59,7 @@ interface GameState {
   encyclopedia: Record<string, EncyclopediaEntry>
 
   startGame: () => void
-  setPlayerPose: (x: number, z: number, yaw: number) => void
+  setPlayerPose: (x: number, y: number, facingRight: boolean) => void
   cast: () => void
   finishCast: () => void
   triggerBite: () => void
@@ -72,7 +71,6 @@ interface GameState {
   setBiteProgress: (p: number) => void
   cycleTimeOfDay: () => void
   setMessage: (msg: string) => void
-  /** 移動可能フェーズか */
   canMove: () => boolean
 }
 
@@ -86,9 +84,8 @@ function clearTimers() {
   sinkTimer = null
 }
 
-const DEFAULT_X = 0
-const DEFAULT_Z = -5.2
-const DEFAULT_YAW = 0
+const DEFAULT_X = 28
+const DEFAULT_Y = 18
 
 export const useGameStore = create<GameState>((set, get) => ({
   phase: 'title',
@@ -96,10 +93,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   timeOfDay: 'morning',
   locationName: 'はじまりキャンプ',
   playerX: DEFAULT_X,
-  playerZ: DEFAULT_Z,
-  playerYaw: DEFAULT_YAW,
+  playerY: DEFAULT_Y,
+  facingRight: true,
   castPoint: null,
-  nearWater: isNearWater(DEFAULT_Z),
+  nearWater: isNearWater(DEFAULT_Y),
   activeSpecies: null,
   biteProgress: 0,
   fightProgress: 0,
@@ -115,15 +112,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   startGame: () => {
     clearTimers()
     playerPose.x = DEFAULT_X
-    playerPose.z = DEFAULT_Z
-    playerPose.yaw = DEFAULT_YAW
+    playerPose.y = DEFAULT_Y
+    playerPose.facingRight = true
     set({
       phase: 'idle',
       playerX: DEFAULT_X,
-      playerZ: DEFAULT_Z,
-      playerYaw: DEFAULT_YAW,
+      playerY: DEFAULT_Y,
+      facingRight: true,
       castPoint: null,
-      nearWater: isNearWater(DEFAULT_Z),
+      nearWater: isNearWater(DEFAULT_Y),
       message: 'WASDで移動。水際でスペース／キャスト',
       activeSpecies: null,
       lastCatch: null,
@@ -132,22 +129,26 @@ export const useGameStore = create<GameState>((set, get) => ({
     })
   },
 
-  setPlayerPose: (x, z, yaw) => {
+  setPlayerPose: (x, y, facingRight) => {
     playerPose.x = x
-    playerPose.z = z
-    playerPose.yaw = yaw
-    const near = isNearWater(z)
+    playerPose.y = y
+    playerPose.facingRight = facingRight
+    const near = isNearWater(y)
     const { phase, nearWater } = get()
-    // 位置は毎フレーム変えず、水際フラグとメッセージだけ React に通知
-    if (near === nearWater && Math.abs(get().playerX - x) < 0.5) {
-      // たまに同期（他UI用）
-      if (Math.random() > 0.95) set({ playerX: x, playerZ: z, playerYaw: yaw })
+    if (
+      near === nearWater &&
+      Math.abs(get().playerX - x) < 1.2 &&
+      Math.abs(get().playerY - y) < 1.2
+    ) {
+      if (Math.random() > 0.96) {
+        set({ playerX: x, playerY: y, facingRight })
+      }
       return
     }
     const patch: Partial<GameState> = {
       playerX: x,
-      playerZ: z,
-      playerYaw: yaw,
+      playerY: y,
+      facingRight,
       nearWater: near,
     }
     if (phase === 'idle' && near !== nearWater) {
@@ -159,7 +160,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   cast: () => {
-    const { phase, nearWater } = get()
+    const { phase, nearWater, facingRight } = get()
     if (phase !== 'idle') return
     if (!nearWater) {
       set({ message: 'もっと水際に近づいてからキャストして' })
@@ -168,8 +169,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     clearTimers()
     const landing = computeCastLanding(
       playerPose.x,
-      playerPose.z,
-      playerPose.yaw,
+      playerPose.y,
+      facingRight,
       0.65 + Math.random() * 0.25,
     )
     set({

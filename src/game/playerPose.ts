@@ -1,6 +1,6 @@
-/** 毎フレーム更新されるプレイヤー姿勢（React 再レンダーを避ける） */
+/** 移動ループ用の生ポインタ（React 再レンダーを避ける） */
 export const playerPose = {
-  x: 0,
-  z: -5.2,
-  yaw: 0,
+  x: 28,
+  y: 18,
+  facingRight: true,
 }

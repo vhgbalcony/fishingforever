@@ -6,10 +6,247 @@
   background: #0a1a1c;
 }
 
-.app-root canvas {
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
+/* ========== 2.5D イラストシーン ========== */
+.scene2d {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  --cam-x: 0%;
+  --cam-y: 0%;
+  background: #1a3a42;
+}
+
+.scene2d-world {
+  position: absolute;
+  inset: -6%;
+  transform: translate(calc(var(--cam-x) * -0.35), calc(var(--cam-y) * -0.2));
+  will-change: transform;
+}
+
+.scene2d-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 45% 55%;
+  user-select: none;
+  pointer-events: none;
+}
+
+.water-shimmer {
+  position: absolute;
+  left: 30%;
+  top: 38%;
+  width: 55%;
+  height: 28%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 40%,
+    transparent 55%,
+    rgba(180, 240, 255, 0.1) 70%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 7s linear infinite;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  border-radius: 40%;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+.player-sprite {
+  position: absolute;
+  width: min(22vw, 160px);
+  height: auto;
+  bottom: 16%;
+  left: 28%;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+  user-select: none;
+  will-change: left, bottom, transform;
+  image-rendering: auto;
+}
+
+.bobber-sprite {
+  position: absolute;
+  width: min(5.5vw, 42px);
+  height: auto;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+  z-index: 40;
+}
+
+.bobber-sprite.bobbing {
+  animation: bob 1.4s ease-in-out infinite;
+}
+
+.bobber-sprite.sinking {
+  animation: sink 0.35s ease-in forwards;
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  50% {
+    transform: translate(-50%, calc(-50% - 6px));
+  }
+}
+
+@keyframes sink {
+  to {
+    transform: translate(-50%, 20%) scale(0.75);
+    opacity: 0.55;
+  }
+}
+
+.cast-arc {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+  animation: cast-fly 0.65s ease-out forwards;
+  z-index: 45;
+  pointer-events: none;
+}
+
+@keyframes cast-fly {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--cast-x), calc(-1 * var(--cast-y))) scale(0.4);
+    opacity: 0;
+  }
+}
+
+.shore-hint {
+  position: absolute;
+  right: 1rem;
+  bottom: 5.5rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(6, 18, 20, 0.45);
+  color: rgba(240, 248, 246, 0.75);
+  font-size: 0.75rem;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* 水中ファイト */
+.scene2d.underwater .scene2d-bg {
+  object-position: center;
+  filter: saturate(1.1);
+}
+
+.fight-fish {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: min(58vw, 420px);
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 12px 24px rgba(0, 40, 50, 0.45));
+  animation: fight-swim 2.4s ease-in-out infinite;
+  z-index: 10;
+  pointer-events: none;
+}
+
+@keyframes fight-swim {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) rotate(-3deg) translateX(-8px);
+  }
+  50% {
+    transform: translate(-50%, calc(-50% - 14px)) rotate(3deg) translateX(10px);
+  }
+}
+
+.water-rays {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    rgba(255, 240, 180, 0.18),
+    transparent 55%
+  );
+  pointer-events: none;
+  z-index: 5;
+}
+
+.bubble {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  animation: rise 4s linear infinite;
+  z-index: 8;
+  pointer-events: none;
+}
+.bubble.b1 {
+  left: 22%;
+  bottom: 5%;
+  animation-duration: 3.6s;
+}
+.bubble.b2 {
+  left: 55%;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  animation-duration: 4.8s;
+  animation-delay: 0.8s;
+}
+.bubble.b3 {
+  left: 72%;
+  bottom: 8%;
+  width: 8px;
+  height: 8px;
+  animation-duration: 3.2s;
+  animation-delay: 1.4s;
+}
+
+@keyframes rise {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-70vh);
+    opacity: 0;
+  }
+}
+
+.fish-preview.illustrated {
+  height: 150px;
+  background-size: cover;
+}
+
+.fish-art {
+  max-width: 92%;
+  max-height: 130px;
+  object-fit: contain;
+  animation: swim 1.6s ease-in-out infinite;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
 }
 
 .overlay {

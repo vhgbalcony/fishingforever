@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# local deploy scratch
+_chunk_*.txt
+_deploy_*.json
+_export_*.cjs
+_mcp_*.json
+_stdout_*.json
+_tool_*.json
+._tool_*.json
+payload-for-tool.json
+deploy-*.json
+
