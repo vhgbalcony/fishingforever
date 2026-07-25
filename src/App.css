@@ -249,6 +249,67 @@
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
 }
 
+.fish-preview.pixel .fish-art,
+.scene2d.style-pixel .player-sprite,
+.scene2d.style-pixel .bobber-sprite,
+.scene2d.style-pixel .fight-fish,
+.scene2d.style-pixel .scene2d-bg {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* 画風切替 */
+.art-style-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 1rem;
+  pointer-events: auto;
+}
+
+.art-style-picker.compact {
+  flex-direction: row;
+  margin: 0;
+}
+
+.art-style-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  color: #7fd4c8;
+  opacity: 0.9;
+}
+
+.art-style-btns {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.btn.art-style-btn {
+  padding: 0.45rem 0.95rem;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8f0ef;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-weight: 600;
+}
+
+.btn.art-style-btn.active {
+  background: linear-gradient(135deg, #3dccc7, #2a9d8f);
+  color: #06201c;
+  border-color: transparent;
+}
+
+.style-preview-hint {
+  margin: 0 0 1.1rem;
+  font-size: 0.85rem;
+  color: #b8c9c6;
+}
+
+.style-preview-hint strong {
+  color: #a8f0e4;
+}
+
 .overlay {
   position: absolute;
   inset: 0;

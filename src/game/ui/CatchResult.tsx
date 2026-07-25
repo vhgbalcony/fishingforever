@@ -6,6 +6,7 @@ export function CatchResult() {
   const phase = useGameStore((s) => s.phase)
   const lastCatch = useGameStore((s) => s.lastCatch)
   const encyclopedia = useGameStore((s) => s.encyclopedia)
+  const artStyle = useGameStore((s) => s.artStyle)
   const dismissResult = useGameStore((s) => s.dismissResult)
 
   if (phase !== 'catch_result' || !lastCatch) return null
@@ -23,14 +24,14 @@ export function CatchResult() {
         <h2>{lastCatch.name}</h2>
 
         <div
-          className="fish-preview illustrated"
+          className={`fish-preview illustrated${artStyle === 'pixel' ? ' pixel' : ''}`}
           style={{
             background: `radial-gradient(circle at 30% 30%, ${species?.accentColor ?? '#fff'}33, ${species?.color ?? '#888'}55)`,
           }}
         >
           <img
             className="fish-art"
-            src={fishArt(lastCatch.speciesId)}
+            src={fishArt(lastCatch.speciesId, artStyle)}
             alt={lastCatch.name}
             draggable={false}
           />

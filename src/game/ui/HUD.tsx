@@ -1,3 +1,4 @@
+import { ART_STYLE_LABEL, type ArtStyle } from '../artAssets'
 import { FISH_SPECIES } from '../fishData'
 import { useGameStore } from '../store'
 import type { Season, TimeOfDay } from '../types'
@@ -15,6 +16,35 @@ const SEASON_LABEL: Record<Season, string> = {
   winter: '冬',
 }
 
+function ArtStylePicker({ compact = false }: { compact?: boolean }) {
+  const artStyle = useGameStore((s) => s.artStyle)
+  const setArtStyle = useGameStore((s) => s.setArtStyle)
+  const styles: ArtStyle[] = ['illustration', 'pixel']
+
+  return (
+    <div
+      className={`art-style-picker${compact ? ' compact' : ''}`}
+      role="group"
+      aria-label="画風"
+    >
+      {!compact && <span className="art-style-label">画風</span>}
+      <div className="art-style-btns">
+        {styles.map((s) => (
+          <button
+            key={s}
+            type="button"
+            className={`btn art-style-btn${artStyle === s ? ' active' : ''}`}
+            onClick={() => setArtStyle(s)}
+            aria-pressed={artStyle === s}
+          >
+            {ART_STYLE_LABEL[s]}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function HUD() {
   const phase = useGameStore((s) => s.phase)
   const message = useGameStore((s) => s.message)
@@ -25,6 +55,7 @@ export function HUD() {
   const fightProgress = useGameStore((s) => s.fightProgress)
   const encyclopedia = useGameStore((s) => s.encyclopedia)
   const nearWater = useGameStore((s) => s.nearWater)
+  const artStyle = useGameStore((s) => s.artStyle)
   const cast = useGameStore((s) => s.cast)
   const tryHook = useGameStore((s) => s.tryHook)
   const cycleTimeOfDay = useGameStore((s) => s.cycleTimeOfDay)
@@ -37,7 +68,11 @@ export function HUD() {
           <p className="title-kicker">清流の釣り体験</p>
           <h1>Fishingforever</h1>
           <p className="title-sub">
-            はじまりキャンプ — イラスト2.5Dで歩いてキャスト
+            はじまりキャンプ — 2.5Dで歩いてキャスト
+          </p>
+          <ArtStylePicker />
+          <p className="style-preview-hint">
+            いまの画風: <strong>{ART_STYLE_LABEL[artStyle]}</strong>
           </p>
           <button type="button" className="btn primary" onClick={startGame}>
             釣りをはじめる
@@ -62,6 +97,8 @@ export function HUD() {
           <span className="meta">
             {SEASON_LABEL[season]}・{TIME_LABEL[timeOfDay]}
             {nearWater ? ' ・水際' : ' ・岸'}
+            {' ・'}
+            {ART_STYLE_LABEL[artStyle]}
           </span>
         </div>
         <div className="meta">
@@ -118,6 +155,7 @@ export function HUD() {
           </>
         )}
         {phase === 'casting' && <span className="hint">キャスト中…</span>}
+        <ArtStylePicker compact />
         <button type="button" className="btn ghost" onClick={cycleTimeOfDay}>
           時間帯切替
         </button>

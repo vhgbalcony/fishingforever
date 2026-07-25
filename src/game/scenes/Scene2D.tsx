@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ART, fishArt } from '../artAssets'
+import { fishArt, getArt } from '../artAssets'
 import { playerPose } from '../playerPose'
 import { useGameStore } from '../store'
 import { clampWalk, MAP } from '../world'
@@ -30,7 +30,7 @@ function isMoveKey(code: string) {
   )
 }
 
-/** 2.5Dイラスト版・はじまりキャンプ */
+/** 2.5D・はじまりキャンプ（イラスト / ピクセル切替対応） */
 export function Scene2D() {
   const rootRef = useRef<HTMLDivElement>(null)
   const playerEl = useRef<HTMLImageElement>(null)
@@ -41,11 +41,14 @@ export function Scene2D() {
   const timeOfDay = useGameStore((s) => s.timeOfDay)
   const castPoint = useGameStore((s) => s.castPoint)
   const activeSpecies = useGameStore((s) => s.activeSpecies)
+  const artStyle = useGameStore((s) => s.artStyle)
   const setPlayerPose = useGameStore((s) => s.setPlayerPose)
   const finishCast = useGameStore((s) => s.finishCast)
   const setBiteProgress = useGameStore((s) => s.setBiteProgress)
   const tickFight = useGameStore((s) => s.tickFight)
 
+  const art = getArt(artStyle)
+  const isPixel = artStyle === 'pixel'
   const underwater = phase === 'underwater_fight' || phase === 'catch_result'
   const showBobber =
     !underwater &&
@@ -54,7 +57,6 @@ export function Scene2D() {
       phase === 'waiting_float' ||
       phase === 'float_sinking')
 
-  // キー入力
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (isMoveKey(e.code)) {
@@ -77,14 +79,12 @@ export function Scene2D() {
     }
   }, [])
 
-  // キャスト完了タイミング
   useEffect(() => {
     if (phase !== 'casting') return
     const t = window.setTimeout(() => finishCast(), 700)
     return () => clearTimeout(t)
   }, [phase, finishCast])
 
-  // メインループ
   useEffect(() => {
     let raf = 0
     let last = performance.now()
@@ -100,7 +100,6 @@ export function Scene2D() {
         let dy = 0
         if (KEYS.has('KeyA') || KEYS.has('ArrowLeft')) dx -= 1
         if (KEYS.has('KeyD') || KEYS.has('ArrowRight')) dx += 1
-        // W = 川寄り（Y+）、S = キャンプ寄り（Y-）
         if (KEYS.has('KeyW') || KEYS.has('ArrowUp')) dy += 1
         if (KEYS.has('KeyS') || KEYS.has('ArrowDown')) dy -= 1
         if (dx !== 0 || dy !== 0) {
@@ -117,7 +116,6 @@ export function Scene2D() {
         }
       }
 
-      // カメラ（わずかなパララックス）
       const targetCamX = (playerPose.x - 40) * 0.18
       const targetCamY = (playerPose.y - 20) * 0.08
       camRef.current.x += (targetCamX - camRef.current.x) * 0.08
@@ -133,9 +131,7 @@ export function Scene2D() {
         )
       }
 
-      // プレイヤーDOM直書き
       if (playerEl.current && !underwater) {
-        // Y: ゲーム座標 0=下寄り, 大=川寄り → 画面 bottom%
         const bottom = 6 + playerPose.y * 0.55
         const left = playerPose.x
         const scale = 0.72 + playerPose.y * 0.004
@@ -148,7 +144,10 @@ export function Scene2D() {
       }
 
       if (state.phase === 'float_sinking') {
-        bite = Math.min(1, bite + dt / (state.activeSpecies?.hookWindowSec ?? 1.4))
+        bite = Math.min(
+          1,
+          bite + dt / (state.activeSpecies?.hookWindowSec ?? 1.4),
+        )
         setBiteProgress(bite)
       } else {
         bite = 0
@@ -171,12 +170,16 @@ export function Scene2D() {
         ? 'brightness(0.88) sepia(0.25) saturate(1.15)'
         : 'brightness(1) saturate(1)'
 
+  const sceneClass = `scene2d${isPixel ? ' style-pixel' : ' style-illustration'}${
+    underwater ? ' underwater' : ''
+  }`
+
   if (underwater) {
     return (
-      <div className="scene2d underwater" ref={rootRef}>
+      <div className={sceneClass} ref={rootRef}>
         <img
           className="scene2d-bg"
-          src={ART.bgUnderwater}
+          src={art.bgUnderwater}
           alt=""
           draggable={false}
         />
@@ -184,7 +187,7 @@ export function Scene2D() {
         {activeSpecies && (
           <img
             className="fight-fish"
-            src={fishArt(activeSpecies.id)}
+            src={fishArt(activeSpecies.id, artStyle)}
             alt={activeSpecies.name}
             draggable={false}
           />
@@ -197,20 +200,19 @@ export function Scene2D() {
   }
 
   return (
-    <div className="scene2d" ref={rootRef} style={{ filter: timeFilter }}>
+    <div className={sceneClass} ref={rootRef} style={{ filter: timeFilter }}>
       <div className="scene2d-world">
         <img
           className="scene2d-bg"
-          src={ART.bgCamp}
+          src={art.bgCamp}
           alt="はじまりキャンプ"
           draggable={false}
         />
-        {/* 川面のきらめき */}
         <div className="water-shimmer" aria-hidden />
         <img
           ref={playerEl}
           className="player-sprite"
-          src={ART.player}
+          src={art.player}
           alt="プレイヤー"
           draggable={false}
         />
@@ -220,7 +222,7 @@ export function Scene2D() {
             className={`bobber-sprite ${
               phase === 'float_sinking' ? 'sinking' : 'bobbing'
             }`}
-            src={ART.bobber}
+            src={art.bobber}
             alt="ウキ"
             draggable={false}
             style={{

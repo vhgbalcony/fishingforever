@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ArtStyle } from './artAssets'
 import {
   estimateWeightG,
   getSpecies,
@@ -17,6 +18,25 @@ import { playerPose } from './playerPose'
 import { computeCastLanding, isNearWater } from './world'
 
 const ENCYCLOPEDIA_KEY = 'fishingforever-encyclopedia'
+const ART_STYLE_KEY = 'fishingforever-art-style'
+
+function loadArtStyle(): ArtStyle {
+  try {
+    const raw = localStorage.getItem(ART_STYLE_KEY)
+    if (raw === 'pixel' || raw === 'illustration') return raw
+  } catch {
+    /* ignore */
+  }
+  return 'illustration'
+}
+
+function saveArtStyle(style: ArtStyle) {
+  try {
+    localStorage.setItem(ART_STYLE_KEY, style)
+  } catch {
+    /* ignore */
+  }
+}
 
 function loadEncyclopedia(): Record<string, EncyclopediaEntry> {
   try {
@@ -57,6 +77,8 @@ interface GameState {
   lastCatch: CaughtFish | null
   message: string
   encyclopedia: Record<string, EncyclopediaEntry>
+  /** 見た目: イラスト or ピクセル */
+  artStyle: ArtStyle
 
   startGame: () => void
   setPlayerPose: (x: number, y: number, facingRight: boolean) => void
@@ -70,6 +92,7 @@ interface GameState {
   dismissResult: () => void
   setBiteProgress: (p: number) => void
   cycleTimeOfDay: () => void
+  setArtStyle: (style: ArtStyle) => void
   setMessage: (msg: string) => void
   canMove: () => boolean
 }
@@ -103,6 +126,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   lastCatch: null,
   message: '',
   encyclopedia: loadEncyclopedia(),
+  artStyle: loadArtStyle(),
 
   canMove: () => {
     const p = get().phase
@@ -301,6 +325,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     const order: TimeOfDay[] = ['morning', 'day', 'evening']
     const i = order.indexOf(get().timeOfDay)
     set({ timeOfDay: order[(i + 1) % order.length]! })
+  },
+
+  setArtStyle: (style) => {
+    saveArtStyle(style)
+    set({ artStyle: style })
   },
 
   setMessage: (msg: string) => set({ message: msg }),
