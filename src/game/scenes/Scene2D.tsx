@@ -2,15 +2,24 @@ import { useEffect, useRef } from 'react'
 import { fishArt, getArt } from '../artAssets'
 import { playerPose } from '../playerPose'
 import { useGameStore } from '../store'
-import { clampWalk, MAP } from '../world'
+import {
+  clampWalk,
+  defaultAim,
+  isNearWater,
+  MAP,
+  ZONE_LABEL,
+} from '../world'
 
 function ShoreHint() {
   const nearWater = useGameStore((s) => s.nearWater)
   const phase = useGameStore((s) => s.phase)
+  const aimZone = useGameStore((s) => s.aimZone)
   if (phase === 'title') return null
   return (
     <div className="shore-hint" aria-hidden>
-      {nearWater ? '◎ 水際' : 'W で川へ近づく'}
+      {nearWater
+        ? `◎ 水際 · 狙い ${ZONE_LABEL[aimZone]}`
+        : '川沿いへ近づく'}
     </div>
   )
 }
@@ -30,11 +39,11 @@ function isMoveKey(code: string) {
   )
 }
 
-/** 2.5D・はじまりキャンプ（イラスト / ピクセル切替対応） */
+/** アイソメ風 2.5D・はじまりキャンプ */
 export function Scene2D() {
   const rootRef = useRef<HTMLDivElement>(null)
+  const worldRef = useRef<HTMLDivElement>(null)
   const playerEl = useRef<HTMLImageElement>(null)
-  const bobberEl = useRef<HTMLImageElement>(null)
   const camRef = useRef({ x: 0, y: 0 })
 
   const phase = useGameStore((s) => s.phase)
@@ -42,7 +51,12 @@ export function Scene2D() {
   const castPoint = useGameStore((s) => s.castPoint)
   const activeSpecies = useGameStore((s) => s.activeSpecies)
   const artStyle = useGameStore((s) => s.artStyle)
+  const aimX = useGameStore((s) => s.aimX)
+  const aimY = useGameStore((s) => s.aimY)
+  const nearWater = useGameStore((s) => s.nearWater)
   const setPlayerPose = useGameStore((s) => s.setPlayerPose)
+  const setAim = useGameStore((s) => s.setAim)
+  const castAt = useGameStore((s) => s.castAt)
   const finishCast = useGameStore((s) => s.finishCast)
   const setBiteProgress = useGameStore((s) => s.setBiteProgress)
   const tickFight = useGameStore((s) => s.tickFight)
@@ -56,6 +70,10 @@ export function Scene2D() {
     (phase === 'casting' ||
       phase === 'waiting_float' ||
       phase === 'float_sinking')
+  const showAim =
+    !underwater &&
+    nearWater &&
+    (phase === 'idle' || phase === 'waiting_float')
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -85,6 +103,48 @@ export function Scene2D() {
     return () => clearTimeout(t)
   }, [phase, finishCast])
 
+  // ポインタ → マップ%
+  const clientToMap = (clientX: number, clientY: number) => {
+    const el = worldRef.current ?? rootRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    const x = ((clientX - rect.left) / rect.width) * 100
+    const y = ((clientY - rect.top) / rect.height) * 100
+    return { x, y }
+  }
+
+  useEffect(() => {
+    if (underwater) return
+    const onMove = (e: PointerEvent) => {
+      const state = useGameStore.getState()
+      if (state.phase !== 'idle' && state.phase !== 'waiting_float') return
+      if (!state.nearWater) return
+      const p = clientToMap(e.clientX, e.clientY)
+      if (!p) return
+      setAim(p.x, p.y)
+    }
+    const onClick = (e: PointerEvent) => {
+      const state = useGameStore.getState()
+      if (state.phase !== 'idle') return
+      // UI 上のクリックは無視
+      const t = e.target as HTMLElement | null
+      if (t?.closest?.('.overlay, button, .title-card, .result-card')) return
+      const p = clientToMap(e.clientX, e.clientY)
+      if (!p) return
+      if (!state.nearWater) {
+        useGameStore.getState().setMessage('水際まで歩いてから川を狙ってね')
+        return
+      }
+      castAt(p.x, p.y)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerdown', onClick)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerdown', onClick)
+    }
+  }, [underwater, setAim, castAt])
+
   useEffect(() => {
     let raf = 0
     let last = performance.now()
@@ -100,8 +160,8 @@ export function Scene2D() {
         let dy = 0
         if (KEYS.has('KeyA') || KEYS.has('ArrowLeft')) dx -= 1
         if (KEYS.has('KeyD') || KEYS.has('ArrowRight')) dx += 1
-        if (KEYS.has('KeyW') || KEYS.has('ArrowUp')) dy += 1
-        if (KEYS.has('KeyS') || KEYS.has('ArrowDown')) dy -= 1
+        if (KEYS.has('KeyW') || KEYS.has('ArrowUp')) dy -= 1
+        if (KEYS.has('KeyS') || KEYS.has('ArrowDown')) dy += 1
         if (dx !== 0 || dy !== 0) {
           const len = Math.hypot(dx, dy) || 1
           dx = (dx / len) * MAP.playerSpeed * dt
@@ -113,13 +173,23 @@ export function Scene2D() {
           playerPose.y = next.y
           playerPose.facingRight = facing
           setPlayerPose(next.x, next.y, facing)
+          // 移動中もデフォルト狙いを川へ
+          if (state.phase === 'idle' && isNearWater(next)) {
+            const aim = defaultAim(next)
+            if (
+              Math.hypot(aim.x - state.aimX, aim.y - state.aimY) > 18
+            ) {
+              // 遠いときだけ自動補正（手動狙いを尊重）
+            }
+          }
         }
       }
 
-      const targetCamX = (playerPose.x - 40) * 0.18
-      const targetCamY = (playerPose.y - 20) * 0.08
-      camRef.current.x += (targetCamX - camRef.current.x) * 0.08
-      camRef.current.y += (targetCamY - camRef.current.y) * 0.08
+      // カメラ追従（マップを広く見せる）
+      const targetCamX = (playerPose.x - 50) * 0.35
+      const targetCamY = (playerPose.y - 55) * 0.28
+      camRef.current.x += (targetCamX - camRef.current.x) * 0.1
+      camRef.current.y += (targetCamY - camRef.current.y) * 0.1
       if (rootRef.current) {
         rootRef.current.style.setProperty(
           '--cam-x',
@@ -132,15 +202,15 @@ export function Scene2D() {
       }
 
       if (playerEl.current && !underwater) {
-        const bottom = 6 + playerPose.y * 0.55
-        const left = playerPose.x
-        const scale = 0.72 + playerPose.y * 0.004
-        playerEl.current.style.left = `${left}%`
-        playerEl.current.style.bottom = `${bottom}%`
-        playerEl.current.style.transform = `translateX(-50%) scaleX(${
+        const scale = 0.55 + playerPose.y * 0.0045
+        playerEl.current.style.left = `${playerPose.x}%`
+        playerEl.current.style.top = `${playerPose.y}%`
+        playerEl.current.style.transform = `translate(-50%, -85%) scaleX(${
           playerPose.facingRight ? 1 : -1
         }) scale(${scale})`
-        playerEl.current.style.zIndex = String(20 + Math.round(playerPose.y))
+        playerEl.current.style.zIndex = String(
+          30 + Math.round(playerPose.y),
+        )
       }
 
       if (state.phase === 'float_sinking') {
@@ -167,10 +237,10 @@ export function Scene2D() {
     timeOfDay === 'morning'
       ? 'brightness(1.05) saturate(1.08)'
       : timeOfDay === 'evening'
-        ? 'brightness(0.88) sepia(0.25) saturate(1.15)'
+        ? 'brightness(0.88) sepia(0.22) saturate(1.12)'
         : 'brightness(1) saturate(1)'
 
-  const sceneClass = `scene2d${isPixel ? ' style-pixel' : ' style-illustration'}${
+  const sceneClass = `scene2d iso${isPixel ? ' style-pixel' : ' style-illustration'}${
     underwater ? ' underwater' : ''
   }`
 
@@ -186,9 +256,9 @@ export function Scene2D() {
         <div className="water-rays" />
         {activeSpecies && (
           <img
-            className="fight-fish"
+            className="fight-fish mystery"
             src={fishArt(activeSpecies.id, artStyle)}
-            alt={activeSpecies.name}
+            alt="掛かった魚"
             draggable={false}
           />
         )}
@@ -201,25 +271,37 @@ export function Scene2D() {
 
   return (
     <div className={sceneClass} ref={rootRef} style={{ filter: timeFilter }}>
-      <div className="scene2d-world">
+      <div className="scene2d-world" ref={worldRef}>
         <img
           className="scene2d-bg"
           src={art.bgCamp}
           alt="はじまりキャンプ"
           draggable={false}
         />
-        <div className="water-shimmer" aria-hidden />
+        <div className="water-shimmer iso-shimmer" aria-hidden />
+
+        {showAim && (
+          <div
+            className="aim-reticle"
+            style={{ left: `${aimX}%`, top: `${aimY}%` }}
+            aria-hidden
+          >
+            <span className="aim-ring" />
+            <span className="aim-cross" />
+          </div>
+        )}
+
         <img
           ref={playerEl}
-          className="player-sprite"
+          className="player-sprite iso-player"
           src={art.player}
           alt="プレイヤー"
           draggable={false}
         />
+
         {showBobber && castPoint && (
           <img
-            ref={bobberEl}
-            className={`bobber-sprite ${
+            className={`bobber-sprite iso-bobber ${
               phase === 'float_sinking' ? 'sinking' : 'bobbing'
             }`}
             src={art.bobber}
@@ -231,16 +313,15 @@ export function Scene2D() {
             }}
           />
         )}
+
         {phase === 'casting' && castPoint && (
           <div
             className="cast-arc"
             style={{
               left: `${playerPose.x}%`,
-              bottom: `${6 + playerPose.y * 0.55}%`,
+              top: `${playerPose.y}%`,
               ['--cast-x' as string]: `${castPoint.x - playerPose.x}%`,
-              ['--cast-y' as string]: `${
-                100 - castPoint.y - (6 + playerPose.y * 0.55)
-              }%`,
+              ['--cast-y' as string]: `${castPoint.y - playerPose.y}%`,
             }}
           />
         )}

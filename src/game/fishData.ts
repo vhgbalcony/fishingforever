@@ -1,3 +1,4 @@
+import type { StreamZone } from './world'
 import type { FishSpecies } from './types'
 
 /** はじまりキャンプ — 第1弾の清流魚（アユは後回し、イワナは渓流マップ用に除外） */
@@ -70,23 +71,62 @@ export const FISH_SPECIES: FishSpecies[] = [
   },
 ]
 
+/**
+ * ゾーン別出現ウェイト（相対値）。
+ * 上流: ヤマメ・アマゴ寄り / 中流: バランス / 下流: オイカワ・ウグイ寄り
+ */
+export const ZONE_WEIGHTS: Record<StreamZone, Record<string, number>> = {
+  upper: {
+    yamame: 34,
+    amago: 28,
+    nijimasu: 12,
+    oikawa: 6,
+    ugui: 8,
+    kajika: 12,
+  },
+  middle: {
+    yamame: 18,
+    amago: 16,
+    nijimasu: 22,
+    oikawa: 16,
+    ugui: 16,
+    kajika: 12,
+  },
+  lower: {
+    yamame: 8,
+    amago: 6,
+    nijimasu: 14,
+    oikawa: 28,
+    ugui: 30,
+    kajika: 14,
+  },
+}
+
 export function getSpecies(id: string): FishSpecies | undefined {
   return FISH_SPECIES.find((f) => f.id === id)
 }
 
-/** 簡易: 体長 cm → 重量 g（楕円体近似の係数） */
 export function estimateWeightG(lengthCm: number, weightFactor: number): number {
   const w = weightFactor * lengthCm ** 3
   return Math.round(w)
 }
 
 export function rollLengthCm(species: FishSpecies): number {
-  const t = (Math.random() + Math.random() + Math.random()) / 3 // 中央寄り
+  const t = (Math.random() + Math.random() + Math.random()) / 3
   const delta = (t - 0.5) * 2 * species.lengthVariance
   return Math.round((species.avgLengthCm + delta) * 10) / 10
 }
 
-export function pickRandomSpecies(): FishSpecies {
-  const i = Math.floor(Math.random() * FISH_SPECIES.length)
-  return FISH_SPECIES[i]!
+export function pickRandomSpecies(zone: StreamZone = 'middle'): FishSpecies {
+  const weights = ZONE_WEIGHTS[zone]
+  let total = 0
+  for (const s of FISH_SPECIES) {
+    total += weights[s.id] ?? 1
+  }
+  let r = Math.random() * total
+  for (const s of FISH_SPECIES) {
+    r -= weights[s.id] ?? 1
+    if (r <= 0) return s
+  }
+  return FISH_SPECIES[0]!
 }

@@ -54,6 +54,9 @@ export function CatchResult() {
 
         {isFirst && <p className="badge">図鑑 初登録！</p>}
         {isNewRecord && !isFirst && <p className="badge">自己最長！</p>}
+        <p className="hint" style={{ marginBottom: '0.75rem' }}>
+          正体がわかった！
+        </p>
 
         <button type="button" className="btn primary" onClick={dismissResult}>
           岸に戻る

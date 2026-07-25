@@ -11,7 +11,8 @@ export type ArtPack = {
 }
 
 const ILLUSTRATION: ArtPack = {
-  bgCamp: '/art/bg-camp.jpg',
+  /** アイソメ風はじまりキャンプ（メイン） */
+  bgCamp: '/art/bg-iso-camp.jpg',
   bgUnderwater: '/art/bg-underwater.jpg',
   player: '/art/player.png',
   bobber: '/art/bobber.png',

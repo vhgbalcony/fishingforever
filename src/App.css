@@ -66,16 +66,20 @@
 
 .player-sprite {
   position: absolute;
-  width: min(22vw, 160px);
+  width: min(18vw, 128px);
   height: auto;
-  bottom: 16%;
-  left: 28%;
-  transform: translateX(-50%);
+  left: 40%;
+  top: 62%;
+  transform: translate(-50%, -85%);
   filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.35));
   pointer-events: none;
   user-select: none;
-  will-change: left, bottom, transform;
+  will-change: left, top, transform;
   image-rendering: auto;
+}
+
+.scene2d.iso .player-sprite.iso-player {
+  width: min(14vw, 100px);
 }
 
 .bobber-sprite {
@@ -86,6 +90,77 @@
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
   pointer-events: none;
   z-index: 40;
+}
+
+.scene2d.iso .bobber-sprite.iso-bobber {
+  width: min(4vw, 32px);
+  z-index: 50;
+}
+
+/* キャスト狙いレティクル */
+.aim-reticle {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  z-index: 45;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.aim-ring {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgba(30, 120, 130, 0.5),
+    0 0 12px rgba(80, 220, 210, 0.45);
+  animation: aim-pulse 1.4s ease-in-out infinite;
+}
+
+.aim-cross::before,
+.aim-cross::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(255, 255, 255, 0.9);
+}
+.aim-cross::before {
+  width: 2px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+}
+.aim-cross::after {
+  width: 14px;
+  height: 2px;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes aim-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+.water-shimmer.iso-shimmer {
+  left: 20%;
+  top: 22%;
+  width: 65%;
+  height: 55%;
+  opacity: 0.55;
+}
+
+.fight-fish.mystery {
+  /* 種名は伏せるが姿は見せる（釣果で確定） */
+  filter: drop-shadow(0 12px 24px rgba(0, 40, 50, 0.45)) saturate(0.95);
 }
 
 .bobber-sprite.bobbing {
@@ -127,13 +202,21 @@
 
 @keyframes cast-fly {
   0% {
-    transform: translate(0, 0) scale(1);
+    transform: translate(-50%, -50%) scale(1);
     opacity: 1;
   }
   100% {
-    transform: translate(var(--cast-x), calc(-1 * var(--cast-y))) scale(0.4);
+    transform: translate(
+        calc(-50% + var(--cast-x)),
+        calc(-50% + var(--cast-y))
+      )
+      scale(0.4);
     opacity: 0;
   }
+}
+
+.scene2d.iso .cast-arc {
+  top: auto;
 }
 
 .shore-hint {

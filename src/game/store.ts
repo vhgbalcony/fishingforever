@@ -15,7 +15,17 @@ import type {
   TimeOfDay,
 } from './types'
 import { playerPose } from './playerPose'
-import { computeCastLanding, isNearWater } from './world'
+import {
+  canCastTo,
+  clampCastTarget,
+  defaultAim,
+  getStreamZone,
+  isNearWater,
+  MAP,
+  type Point,
+  type StreamZone,
+  ZONE_LABEL,
+} from './world'
 
 const ENCYCLOPEDIA_KEY = 'fishingforever-encyclopedia'
 const ART_STYLE_KEY = 'fishingforever-art-style'
@@ -56,7 +66,7 @@ function saveEncyclopedia(data: Record<string, EncyclopediaEntry>) {
   }
 }
 
-export type CastPoint = { x: number; y: number }
+export type CastPoint = Point
 
 interface GameState {
   phase: GamePhase
@@ -64,12 +74,17 @@ interface GameState {
   timeOfDay: TimeOfDay
   locationName: string
 
-  /** プレイヤー位置（画面%）、向き */
   playerX: number
   playerY: number
   facingRight: boolean
+  /** キャスト狙い位置（水上） */
+  aimX: number
+  aimY: number
   castPoint: CastPoint | null
   nearWater: boolean
+  /** 狙い／着水のゾーン */
+  aimZone: StreamZone
+  castZone: StreamZone | null
 
   activeSpecies: FishSpecies | null
   biteProgress: number
@@ -77,12 +92,13 @@ interface GameState {
   lastCatch: CaughtFish | null
   message: string
   encyclopedia: Record<string, EncyclopediaEntry>
-  /** 見た目: イラスト or ピクセル */
   artStyle: ArtStyle
 
   startGame: () => void
   setPlayerPose: (x: number, y: number, facingRight: boolean) => void
+  setAim: (x: number, y: number) => void
   cast: () => void
+  castAt: (x: number, y: number) => void
   finishCast: () => void
   triggerBite: () => void
   tryHook: () => void
@@ -107,19 +123,23 @@ function clearTimers() {
   sinkTimer = null
 }
 
-const DEFAULT_X = 28
-const DEFAULT_Y = 18
+const DEFAULT = MAP.spawn
+const initialAim = defaultAim(DEFAULT)
 
 export const useGameStore = create<GameState>((set, get) => ({
   phase: 'title',
   season: 'spring',
   timeOfDay: 'morning',
   locationName: 'はじまりキャンプ',
-  playerX: DEFAULT_X,
-  playerY: DEFAULT_Y,
+  playerX: DEFAULT.x,
+  playerY: DEFAULT.y,
   facingRight: true,
+  aimX: initialAim.x,
+  aimY: initialAim.y,
   castPoint: null,
-  nearWater: isNearWater(DEFAULT_Y),
+  nearWater: isNearWater(DEFAULT),
+  aimZone: getStreamZone(initialAim),
+  castZone: null,
   activeSpecies: null,
   biteProgress: 0,
   fightProgress: 0,
@@ -135,17 +155,23 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   startGame: () => {
     clearTimers()
-    playerPose.x = DEFAULT_X
-    playerPose.y = DEFAULT_Y
+    playerPose.x = DEFAULT.x
+    playerPose.y = DEFAULT.y
     playerPose.facingRight = true
+    const aim = defaultAim(DEFAULT)
     set({
       phase: 'idle',
-      playerX: DEFAULT_X,
-      playerY: DEFAULT_Y,
+      playerX: DEFAULT.x,
+      playerY: DEFAULT.y,
       facingRight: true,
+      aimX: aim.x,
+      aimY: aim.y,
+      aimZone: getStreamZone(aim),
       castPoint: null,
-      nearWater: isNearWater(DEFAULT_Y),
-      message: 'WASDで移動。水際でスペース／キャスト',
+      castZone: null,
+      nearWater: isNearWater(DEFAULT),
+      message:
+        'WASDで移動。水際で川をクリックして狙い、スペースでキャスト',
       activeSpecies: null,
       lastCatch: null,
       fightProgress: 0,
@@ -157,61 +183,90 @@ export const useGameStore = create<GameState>((set, get) => ({
     playerPose.x = x
     playerPose.y = y
     playerPose.facingRight = facingRight
-    const near = isNearWater(y)
+    const pos = { x, y }
+    const near = isNearWater(pos)
+    const aim = clampCastTarget(pos, { x: get().aimX, y: get().aimY })
+    const aimZone = getStreamZone(aim)
     const { phase, nearWater } = get()
-    if (
-      near === nearWater &&
-      Math.abs(get().playerX - x) < 1.2 &&
-      Math.abs(get().playerY - y) < 1.2
-    ) {
-      if (Math.random() > 0.96) {
-        set({ playerX: x, playerY: y, facingRight })
-      }
-      return
-    }
+
     const patch: Partial<GameState> = {
       playerX: x,
       playerY: y,
       facingRight,
       nearWater: near,
+      aimX: aim.x,
+      aimY: aim.y,
+      aimZone,
     }
+
     if (phase === 'idle' && near !== nearWater) {
       patch.message = near
-        ? '水際だ。スペースかボタンでキャスト'
-        : 'WASDで移動。水際まで歩いてキャスト'
+        ? `水際だ（${ZONE_LABEL[aimZone]}を狙える）。川をクリック／スペースでキャスト`
+        : 'WASDで移動。川沿いまで歩いて狙いをつけよう'
     }
     set(patch)
   },
 
+  setAim: (x, y) => {
+    const from = { x: playerPose.x, y: playerPose.y }
+    if (!isNearWater(from) && get().phase === 'idle') {
+      // 水際以外では狙いだけ記憶（着水はクランプ）
+    }
+    const aim = clampCastTarget(from, { x, y })
+    set({
+      aimX: aim.x,
+      aimY: aim.y,
+      aimZone: getStreamZone(aim),
+    })
+  },
+
   cast: () => {
-    const { phase, nearWater, facingRight } = get()
+    const { phase, nearWater, aimX, aimY } = get()
     if (phase !== 'idle') return
+    const from = { x: playerPose.x, y: playerPose.y }
     if (!nearWater) {
       set({ message: 'もっと水際に近づいてからキャストして' })
       return
     }
+    const landing = clampCastTarget(from, { x: aimX, y: aimY })
+    if (!canCastTo(from, landing)) {
+      set({
+        message: 'そこには届かない… 近づくか、狙いを変えてみて',
+      })
+      return
+    }
     clearTimers()
-    const landing = computeCastLanding(
-      playerPose.x,
-      playerPose.y,
-      facingRight,
-      0.65 + Math.random() * 0.25,
-    )
+    const zone = getStreamZone(landing)
     set({
       phase: 'casting',
       castPoint: landing,
-      message: 'キャスト…',
+      castZone: zone,
+      message: `${ZONE_LABEL[zone]}へキャスト…`,
       activeSpecies: null,
       biteProgress: 0,
       fightProgress: 0,
     })
   },
 
+  castAt: (x, y) => {
+    const { phase, nearWater } = get()
+    if (phase !== 'idle') return
+    if (!nearWater) {
+      set({ message: 'もっと水際に近づいてからキャストして' })
+      return
+    }
+    get().setAim(x, y)
+    get().cast()
+  },
+
   finishCast: () => {
     if (get().phase !== 'casting') return
+    const zone = get().castZone
     set({
       phase: 'waiting_float',
-      message: 'ウキを注視して… アタリを待て（WASDで移動可）',
+      message: zone
+        ? `${ZONE_LABEL[zone]}でウキ待ち… アタリに備えよう`
+        : 'ウキを注視して… アタリを待て',
     })
     const delay = 2000 + Math.random() * 3000
     biteTimer = setTimeout(() => {
@@ -221,12 +276,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   triggerBite: () => {
     if (get().phase !== 'waiting_float') return
-    const species = pickRandomSpecies()
+    const zone = get().castZone ?? 'middle'
+    const species = pickRandomSpecies(zone)
     set({
       phase: 'float_sinking',
       activeSpecies: species,
       biteProgress: 0,
-      message: `アタリ！ ${species.name}か…？ 今だ、アワセろ！`,
+      // ネタバレ防止: 名前は出さない
+      message: 'アタリ！！ 今だ、アワセろ！',
     })
     sinkTimer = setTimeout(() => {
       if (get().phase === 'float_sinking') get().missHook()
@@ -251,7 +308,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({
       phase: 'underwater_fight',
       fightProgress: 0,
-      message: `${activeSpecies.name}が掛かった！ 引きを楽しもう`,
+      // ネタバレ防止: 種名は釣果まで伏せる
+      message: '掛かった！ 引きを楽しもう…',
     })
   },
 
@@ -260,10 +318,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     clearTimers()
     set({
       phase: 'idle',
-      message: '逃した… 場所を変えて再キャストもアリ',
+      message: '逃した… 場所や狙いを変えて再キャストもアリ',
       activeSpecies: null,
       biteProgress: 0,
       castPoint: null,
+      castZone: null,
     })
   },
 
@@ -308,14 +367,19 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   dismissResult: () => {
+    const aim = defaultAim({ x: playerPose.x, y: playerPose.y })
     set({
       phase: 'idle',
-      message: 'WASDで移動。水際でスペース／キャスト',
+      message: 'WASDで移動。水際で川をクリック／スペースでキャスト',
       activeSpecies: null,
       lastCatch: null,
       fightProgress: 0,
       biteProgress: 0,
       castPoint: null,
+      castZone: null,
+      aimX: aim.x,
+      aimY: aim.y,
+      aimZone: getStreamZone(aim),
     })
   },
 

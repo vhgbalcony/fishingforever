@@ -2,6 +2,7 @@ import { ART_STYLE_LABEL, type ArtStyle } from '../artAssets'
 import { FISH_SPECIES } from '../fishData'
 import { useGameStore } from '../store'
 import type { Season, TimeOfDay } from '../types'
+import { ZONE_LABEL } from '../world'
 
 const TIME_LABEL: Record<TimeOfDay, string> = {
   morning: '朝',
@@ -55,6 +56,8 @@ export function HUD() {
   const fightProgress = useGameStore((s) => s.fightProgress)
   const encyclopedia = useGameStore((s) => s.encyclopedia)
   const nearWater = useGameStore((s) => s.nearWater)
+  const aimZone = useGameStore((s) => s.aimZone)
+  const castZone = useGameStore((s) => s.castZone)
   const artStyle = useGameStore((s) => s.artStyle)
   const cast = useGameStore((s) => s.cast)
   const tryHook = useGameStore((s) => s.tryHook)
@@ -68,16 +71,19 @@ export function HUD() {
           <p className="title-kicker">清流の釣り体験</p>
           <h1>Fishingforever</h1>
           <p className="title-sub">
-            はじまりキャンプ — 2.5Dで歩いてキャスト
+            はじまりキャンプ — アイソメ視点で歩いて、好きな場所へキャスト
           </p>
           <ArtStylePicker />
           <p className="style-preview-hint">
             いまの画風: <strong>{ART_STYLE_LABEL[artStyle]}</strong>
+            （本編はイラスト推奨）
           </p>
           <button type="button" className="btn primary" onClick={startGame}>
             釣りをはじめる
           </button>
-          <p className="hint">WASD 移動 ／ スペース キャスト・アワセ</p>
+          <p className="hint">
+            WASD 移動 ／ 川をクリックで狙い＆キャスト ／ スペースでもキャスト
+          </p>
         </div>
       </div>
     )
@@ -88,6 +94,14 @@ export function HUD() {
     0,
   )
   const speciesFound = Object.keys(encyclopedia).length
+  const zoneShown =
+    castZone &&
+    (phase === 'casting' ||
+      phase === 'waiting_float' ||
+      phase === 'float_sinking' ||
+      phase === 'underwater_fight')
+      ? castZone
+      : aimZone
 
   return (
     <div className="overlay hud">
@@ -97,8 +111,8 @@ export function HUD() {
           <span className="meta">
             {SEASON_LABEL[season]}・{TIME_LABEL[timeOfDay]}
             {nearWater ? ' ・水際' : ' ・岸'}
-            {' ・'}
-            {ART_STYLE_LABEL[artStyle]}
+            {' · '}
+            {ZONE_LABEL[zoneShown]}
           </span>
         </div>
         <div className="meta">
@@ -125,7 +139,7 @@ export function HUD() {
 
       {phase === 'underwater_fight' && (
         <div className="fight-meter">
-          <div className="bite-label">ファイト中 — 魚を鑑賞</div>
+          <div className="bite-label">ファイト中 — なにが掛かった…？</div>
           <div className="meter-track">
             <div
               className="meter-fill fight"
@@ -138,17 +152,17 @@ export function HUD() {
       <footer className="bottom-bar">
         {(phase === 'idle' || phase === 'waiting_float') && (
           <>
-            <span className="hint">WASD 移動</span>
+            <span className="hint">WASD 移動 · 川クリック</span>
             <button
               type="button"
               className="btn primary"
               onClick={cast}
               disabled={phase !== 'idle' || !nearWater}
-              title={!nearWater ? '水際に近づいてください' : 'キャスト'}
+              title={!nearWater ? '水際に近づいてください' : '狙いへキャスト'}
             >
               {phase === 'idle'
                 ? nearWater
-                  ? 'キャスト'
+                  ? `キャスト（${ZONE_LABEL[aimZone]}）`
                   : '水際へ…'
                 : 'ウキ待ち…'}
             </button>
