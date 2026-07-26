@@ -23,11 +23,12 @@
   will-change: transform;
 }
 
-/* アイソメ: マップを拡大し、--px/--py でプレイヤー中心スクロール */
+/* アイソメ: マップを拡大し、--px/--py でプレイヤー中心スクロール
+   端の見切れは JS 側 clampCamera で防止（ブラウザ限界ではない） */
 .scene2d.iso {
   --px: 50;
   --py: 55;
-  --map-scale: 1.65;
+  --map-scale: 1.42;
 }
 
 .scene2d.iso .scene2d-world {
@@ -38,6 +39,8 @@
   top: calc(50% - var(--py) * 1% * var(--map-scale));
   transform: none;
   will-change: left, top;
+  /* わずかなぼかしよりシャープ優先 */
+  image-rendering: auto;
 }
 
 .scene2d-bg {
@@ -46,9 +49,13 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 45% 55%;
+  object-position: center center;
   user-select: none;
   pointer-events: none;
+  /* 引き伸ばし時も少しマシに */
+  image-rendering: auto;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .water-shimmer {
@@ -259,13 +266,15 @@
   position: absolute;
   left: 50%;
   top: 48%;
-  width: min(58vw, 420px);
+  /* 基準幅 ≈ 20cm 魚。--fish-scale は体長 cm / 20 */
+  width: min(46vw, 340px);
   --fish-scale: 1;
   transform: translate(-50%, -50%) scale(var(--fish-scale));
   filter: drop-shadow(0 12px 24px rgba(0, 40, 50, 0.45));
   animation: fight-swim 2.4s ease-in-out infinite;
   z-index: 10;
   pointer-events: none;
+  transform-origin: center center;
 }
 
 @keyframes fight-swim {

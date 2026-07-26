@@ -120,12 +120,32 @@ export function estimateWeightG(lengthCm: number, weightFactor: number): number 
   return Math.round(w)
 }
 
+/**
+ * 体長抽選。
+ * 以前は平均付近に寄る分布だけで、幼魚閾値未満がほぼ出なかったため
+ * 約 28% は幼魚帯から明示的に出す。
+ */
 export function rollLengthCm(species: FishSpecies): number {
+  // 幼魚帯（juvenileMaxCm 未満）
+  if (Math.random() < 0.28) {
+    const max = species.juvenileMaxCm * 0.97
+    const min = Math.max(
+      species.juvenileMaxCm * 0.42,
+      species.avgLengthCm * 0.22,
+      3,
+    )
+    const lo = Math.min(min, max * 0.85)
+    const hi = Math.max(lo + 0.5, max)
+    return Math.round((lo + Math.random() * (hi - lo)) * 10) / 10
+  }
+
+  // 成魚〜大物寄りの三角分布
   const t = (Math.random() + Math.random() + Math.random()) / 3
   const delta = (t - 0.5) * 2 * species.lengthVariance
-  const raw = species.avgLengthCm + delta
-  // たまに一回り大きい個体
-  const big = Math.random() < 0.08 ? 1.15 + Math.random() * 0.2 : 1
+  // 幼魚帯をまたがないよう下限を少し上げる
+  const floor = species.juvenileMaxCm
+  const raw = Math.max(floor, species.avgLengthCm + delta)
+  const big = Math.random() < 0.08 ? 1.12 + Math.random() * 0.18 : 1
   return Math.round(raw * big * 10) / 10
 }
 
@@ -138,13 +158,18 @@ export function getLifeStage(
   return 'adult'
 }
 
-/** 平均に対する表示スケール（水中・釣果） */
+/**
+ * 表示スケールは「種の平均比」ではなく「体長 cm の絶対値」基準。
+ * 17cm ヤマメと 18cm オイカワが同程度の大きさに見えるようにする。
+ * 基準: 20cm = 1.0
+ */
 export function fishDisplayScale(
-  species: FishSpecies,
+  _species: FishSpecies,
   lengthCm: number,
 ): number {
-  const ratio = lengthCm / species.avgLengthCm
-  return Math.min(1.45, Math.max(0.42, ratio))
+  const REFERENCE_CM = 20
+  const ratio = lengthCm / REFERENCE_CM
+  return Math.min(1.55, Math.max(0.32, ratio))
 }
 
 export function pickRandomSpecies(zone: StreamZone = 'middle'): FishSpecies {

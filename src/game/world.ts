@@ -13,13 +13,17 @@ export type Point = { x: number; y: number }
  */
 export const MAP = {
   /** マップ全体の歩行外枠（森の端まで探索） */
-  walkMinX: 6,
-  walkMaxX: 94,
-  walkMinY: 10,
-  walkMaxY: 92,
+  walkMinX: 8,
+  walkMaxX: 92,
+  walkMinY: 12,
+  walkMaxY: 90,
   playerSpeed: 22,
-  /** ビューに対するマップ拡大率（大きいほどスクロール探索感） */
-  mapScale: 1.65,
+  /**
+   * ビューに対するマップ拡大率。
+   * 大きすぎると一枚絵が引き伸ばされて荒くなるため 1.4 前後を目安に。
+   * 端の見切れは clampCamera で防ぎ、ブラウザ限界ではない。
+   */
+  mapScale: 1.42,
   shoreDistance: 14,
   castMaxDist: 26,
   castMinDist: 5,
@@ -218,4 +222,23 @@ export function defaultAim(from: Point): Point {
     x: from.x + (dx / len) * reach,
     y: from.y + (dy / len) * reach,
   })
+}
+
+/**
+ * カメラ位置をクランプして、拡大マップの端で画面外（見切れ・余白）が出ないようにする。
+ * プレイヤーは端まで歩けるが、カメラは「マップが画面を埋め尽くす」範囲に留まる。
+ */
+export function clampCamera(
+  x: number,
+  y: number,
+  scale: number = MAP.mapScale,
+): Point {
+  // world 幅 = scale * 100% のとき、中央合わせで隙間が出ない px 範囲は [50/s, 100-50/s]
+  const margin = 50 / scale
+  const min = margin
+  const max = 100 - margin
+  return {
+    x: Math.min(max, Math.max(min, x)),
+    y: Math.min(max, Math.max(min, y)),
+  }
 }

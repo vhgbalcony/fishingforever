@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties } from 'react'
 import { fishArt, getArt } from '../artAssets'
 import { playerPose } from '../playerPose'
 import { useGameStore } from '../store'
-import { clampWalk, MAP, ZONE_LABEL } from '../world'
+import { clampCamera, clampWalk, MAP, ZONE_LABEL } from '../world'
 
 const MAP_SCALE = MAP.mapScale
 
@@ -179,20 +179,16 @@ export function Scene2D() {
         }
       }
 
-      // カメラ: プレイヤーを画面中央付近に据えてマップをスクロール
-      const targetCamX = playerPose.x
-      const targetCamY = playerPose.y
-      camRef.current.x += (targetCamX - camRef.current.x) * 0.12
-      camRef.current.y += (targetCamY - camRef.current.y) * 0.12
+      // カメラ: プレイヤー追従＋端でマップ見切れが出ないようクランプ
+      const target = clampCamera(playerPose.x, playerPose.y, MAP_SCALE)
+      camRef.current.x += (target.x - camRef.current.x) * 0.14
+      camRef.current.y += (target.y - camRef.current.y) * 0.14
+      const cam = clampCamera(camRef.current.x, camRef.current.y, MAP_SCALE)
+      camRef.current.x = cam.x
+      camRef.current.y = cam.y
       if (rootRef.current) {
-        rootRef.current.style.setProperty(
-          '--px',
-          camRef.current.x.toFixed(2),
-        )
-        rootRef.current.style.setProperty(
-          '--py',
-          camRef.current.y.toFixed(2),
-        )
+        rootRef.current.style.setProperty('--px', cam.x.toFixed(2))
+        rootRef.current.style.setProperty('--py', cam.y.toFixed(2))
         rootRef.current.style.setProperty('--map-scale', String(MAP_SCALE))
       }
 

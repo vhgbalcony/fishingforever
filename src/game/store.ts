@@ -331,8 +331,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     const lengthCm = rollLengthCm(activeSpecies)
     const scale = fishDisplayScale(activeSpecies, lengthCm)
+    // scale は 20cm=1.0 の絶対値。ヒントも体長 cm 基準
     const sizeHint =
-      scale < 0.7 ? '小さめの引き…' : scale > 1.15 ? 'ずしり重い！' : '引きを楽しもう…'
+      lengthCm < activeSpecies.juvenileMaxCm
+        ? '小さな引き… 幼魚かも'
+        : lengthCm >= activeSpecies.avgLengthCm * 1.2
+          ? 'ずしり重い！'
+          : '引きを楽しもう…'
     set({
       phase: 'underwater_fight',
       fightProgress: 0,
