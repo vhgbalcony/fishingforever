@@ -1,56 +1,71 @@
-/** アイソメ風マップ座標（画面% = マップ全体の %）。原点は左上、Y が大きいほど手前 */
+/** 縦長マルチパネルマップ座標。原点は左上、Y が大きいほど下流（手前） */
 
 export type StreamZone = 'upper' | 'middle' | 'lower'
 
 export type Point = { x: number; y: number }
 
 /**
- * bg-iso-camp（広いマップ）想定:
- * - 上流: 左上の滝
- * - 中流: アーチ橋2本で対岸へ
- * - 下流: 右下の砂利浜
- * - 歩行: 両岸の草原＋橋。川本体は歩けない
+ * はじまりキャンプ — 縦3パネル構成
+ * - 上流 (y 0–33): 滝・源流
+ * - 中流 (y 33–67): キャンプ・橋
+ * - 下流 (y 67–100): 砂利浜・開けた河原
+ *
+ * x,y はマップ全体に対する %（0–100）。
+ * 見た目は3枚の正方形パネルを縦に連結。
  */
 export const MAP = {
-  /** マップ全体の歩行外枠（森の端まで探索） */
+  /** 歩行外枠 */
   walkMinX: 8,
   walkMaxX: 92,
-  walkMinY: 12,
-  walkMaxY: 90,
-  playerSpeed: 22,
+  walkMinY: 4,
+  walkMaxY: 96,
+  playerSpeed: 16,
   /**
    * ビューに対するマップ拡大率。
-   * 大きすぎると一枚絵が引き伸ばされて荒くなるため 1.4 前後を目安に。
-   * 端の見切れは clampCamera で防ぎ、ブラウザ限界ではない。
+   * 横はほぼ画面幅、縦は3パネル分スクロール探索。
    */
-  mapScale: 1.42,
-  shoreDistance: 14,
-  castMaxDist: 26,
-  castMinDist: 5,
+  mapScaleX: 1.08,
+  mapScaleY: 2.85,
+  shoreDistance: 12,
+  castMaxDist: 12,
+  castMinDist: 2.5,
+  /** パネル境界（y%）。ゾーン判定用 */
+  panelBounds: {
+    upperEnd: 33.4,
+    middleEnd: 66.7,
+  },
   water: {
+    /** 上→下へ流れる川心。中心付近を緩やかに蛇行 */
     spine: [
-      { x: 16, y: 16 },
-      { x: 24, y: 24 },
-      { x: 34, y: 34 },
-      { x: 44, y: 42 },
-      { x: 54, y: 52 },
-      { x: 64, y: 60 },
-      { x: 74, y: 70 },
-      { x: 86, y: 82 },
+      { x: 48, y: 5 },
+      { x: 50, y: 12 },
+      { x: 46, y: 22 },
+      { x: 52, y: 30 },
+      { x: 49, y: 38 },
+      { x: 54, y: 46 },
+      { x: 48, y: 54 },
+      { x: 52, y: 62 },
+      { x: 47, y: 70 },
+      { x: 53, y: 78 },
+      { x: 50, y: 86 },
+      { x: 48, y: 94 },
     ] as Point[],
     /** 川幅（これ以内は水域＝歩行不可。橋は例外） */
-    halfWidth: 7.2,
+    halfWidth: 5.5,
   },
   /**
-   * 橋の歩行帯（川をまたぐ廊下）。
-   * 中心 + 半径でカプセル近似
+   * 橋の歩行帯（中流パネル）。中心 + 半径
    */
   bridges: [
-    { x: 40, y: 37, radius: 7.5 }, // 上流寄りアーチ橋
-    { x: 62, y: 56, radius: 7.5 }, // 下流寄りアーチ橋
+    { x: 50, y: 44, radius: 6 },
+    { x: 50, y: 58, radius: 6 },
   ] as { x: number; y: number; radius: number }[],
-  spawn: { x: 28, y: 68 } as Point,
+  /** 中流キャンプ岸辺（左岸・水際） */
+  spawn: { x: 42, y: 52 } as Point,
 } as const
+
+/** 互換: 旧 mapScale 参照用（縦スケールを返す） */
+export const MAP_SCALE_COMPAT = MAP.mapScaleY
 
 export const ZONE_LABEL: Record<StreamZone, string> = {
   upper: '上流',
@@ -58,8 +73,18 @@ export const ZONE_LABEL: Record<StreamZone, string> = {
   lower: '下流',
 }
 
+/** マップ% 上のユークリッド距離（歩行・水域判定用） */
 function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+/**
+ * 画面上の見た目に近い距離（縦長スケール込み）。
+ * キャスト距離の体感を横移動と揃える。
+ */
+function distScreen(a: Point, b: Point): number {
+  const yScale = MAP.mapScaleY / MAP.mapScaleX
+  return Math.hypot(a.x - b.x, (a.y - b.y) * yScale)
 }
 
 export function nearestOnRiver(p: Point): {
@@ -139,13 +164,12 @@ export function clampWalk(x: number, y: number, from?: Point): Point {
     if (isWalkable(onlyY)) return onlyY
     return from
   }
-  // from なし: 水から押し出す
   if (isInWater(target) || nearestOnRiver(target).distance <= MAP.water.halfWidth) {
     const n = nearestOnRiver(target)
     const dx = target.x - n.point.x
     const dy = target.y - n.point.y
     const len = Math.hypot(dx, dy) || 1
-    const push = MAP.water.halfWidth + 1.2
+    const push = MAP.water.halfWidth + 1.0
     const out = {
       x: n.point.x + (dx / len) * push,
       y: n.point.y + (dy / len) * push,
@@ -160,30 +184,28 @@ export function isNearWater(p: Point): boolean {
   if (isOnBridge(p)) return true
   const { distance } = nearestOnRiver(p)
   return (
-    distance <= MAP.shoreDistance && distance >= MAP.water.halfWidth * 0.35
+    distance <= MAP.shoreDistance && distance >= MAP.water.halfWidth * 0.3
   )
 }
 
+/** パネル位置＋川沿い位置でゾーン判定（上流/中流/下流） */
 export function getStreamZone(p: Point): StreamZone {
-  const { t } = nearestOnRiver(p)
-  if (t < 0.34) return 'upper'
-  if (t < 0.67) return 'middle'
+  if (p.y < MAP.panelBounds.upperEnd) return 'upper'
+  if (p.y < MAP.panelBounds.middleEnd) return 'middle'
   return 'lower'
 }
 
 export function canCastTo(from: Point, target: Point): boolean {
-  // 着水は「水」のみ（橋の上は着水不可）
   const river = nearestOnRiver(target)
   if (river.distance > MAP.water.halfWidth) return false
   if (isOnBridge(target)) return false
   if (!isNearWater(from)) return false
-  const d = dist(from, target)
+  const d = distScreen(from, target)
   return d >= MAP.castMinDist && d <= MAP.castMaxDist
 }
 
 export function clampCastTarget(from: Point, target: Point): Point {
   let { x, y } = target
-  // 橋の上なら川心へ押し出す
   if (isOnBridge({ x, y })) {
     const n = nearestOnRiver({ x, y })
     x = n.point.x
@@ -195,15 +217,23 @@ export function clampCastTarget(from: Point, target: Point): Point {
     x = near.point.x + (x - near.point.x) * pull * 0.85
     y = near.point.y + (y - near.point.y) * pull * 0.85
   }
-  const d = dist(from, { x, y })
+  const d = distScreen(from, { x, y })
   if (d > MAP.castMaxDist && d > 0.01) {
-    const s = MAP.castMaxDist / d
-    x = from.x + (x - from.x) * s
-    y = from.y + (y - from.y) * s
+    const yScale = MAP.mapScaleY / MAP.mapScaleX
+    const dx = x - from.x
+    const dy = (y - from.y) * yScale
+    const len = Math.hypot(dx, dy) || 1
+    const s = MAP.castMaxDist / len
+    x = from.x + dx * s
+    y = from.y + (dy * s) / yScale
   } else if (d < MAP.castMinDist && d > 0.01) {
-    const s = MAP.castMinDist / d
-    x = from.x + (x - from.x) * s
-    y = from.y + (y - from.y) * s
+    const yScale = MAP.mapScaleY / MAP.mapScaleX
+    const dx = x - from.x
+    const dy = (y - from.y) * yScale
+    const len = Math.hypot(dx, dy) || 1
+    const s = MAP.castMinDist / len
+    x = from.x + dx * s
+    y = from.y + (dy * s) / yScale
   }
   const again = nearestOnRiver({ x, y })
   if (again.distance > MAP.water.halfWidth) {
@@ -216,29 +246,28 @@ export function defaultAim(from: Point): Point {
   const toward = nearestOnRiver(from).point
   const dx = toward.x - from.x
   const dy = toward.y - from.y
-  const len = Math.hypot(dx, dy) || 1
   const reach = MAP.castMinDist + (MAP.castMaxDist - MAP.castMinDist) * 0.55
+  const yScale = MAP.mapScaleY / MAP.mapScaleX
+  const dirLen = Math.hypot(dx, dy * yScale) || 1
   return clampCastTarget(from, {
-    x: from.x + (dx / len) * reach,
-    y: from.y + (dy / len) * reach,
+    x: from.x + (dx / dirLen) * reach,
+    y: from.y + ((dy * yScale) / dirLen) * (reach / yScale),
   })
 }
 
 /**
  * カメラ位置をクランプして、拡大マップの端で画面外（見切れ・余白）が出ないようにする。
- * プレイヤーは端まで歩けるが、カメラは「マップが画面を埋め尽くす」範囲に留まる。
  */
 export function clampCamera(
   x: number,
   y: number,
-  scale: number = MAP.mapScale,
+  scaleX: number = MAP.mapScaleX,
+  scaleY: number = MAP.mapScaleY,
 ): Point {
-  // world 幅 = scale * 100% のとき、中央合わせで隙間が出ない px 範囲は [50/s, 100-50/s]
-  const margin = 50 / scale
-  const min = margin
-  const max = 100 - margin
+  const marginX = 50 / scaleX
+  const marginY = 50 / scaleY
   return {
-    x: Math.min(max, Math.max(min, x)),
-    y: Math.min(max, Math.max(min, y)),
+    x: Math.min(100 - marginX, Math.max(marginX, x)),
+    y: Math.min(100 - marginY, Math.max(marginY, y)),
   }
 }

@@ -1,10 +1,8 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
-import { fishArt, getArt } from '../artAssets'
+import { fishArt, getArt, PANEL_ORDER } from '../artAssets'
 import { playerPose } from '../playerPose'
 import { useGameStore } from '../store'
 import { clampCamera, clampWalk, MAP, ZONE_LABEL } from '../world'
-
-const MAP_SCALE = MAP.mapScale
 
 function ShoreHint() {
   const nearWater = useGameStore((s) => s.nearWater)
@@ -15,7 +13,7 @@ function ShoreHint() {
     <div className="shore-hint" aria-hidden>
       {nearWater
         ? `◎ 水際 · 狙い ${ZONE_LABEL[aimZone]}`
-        : '川沿いへ近づく'}
+        : '川沿いへ近づく · WASDで上下に探索'}
     </div>
   )
 }
@@ -35,12 +33,12 @@ function isMoveKey(code: string) {
   )
 }
 
-/** アイソメ風 2.5D・はじまりキャンプ */
+/** アイソメ風 2.5D・縦3パネル（上流→中流→下流） */
 export function Scene2D() {
   const rootRef = useRef<HTMLDivElement>(null)
   const worldRef = useRef<HTMLDivElement>(null)
   const playerEl = useRef<HTMLImageElement>(null)
-  const camRef = useRef({ x: 0, y: 0 })
+  const camRef = useRef({ x: MAP.spawn.x, y: MAP.spawn.y })
 
   const phase = useGameStore((s) => s.phase)
   const timeOfDay = useGameStore((s) => s.timeOfDay)
@@ -100,7 +98,7 @@ export function Scene2D() {
     return () => clearTimeout(t)
   }, [phase, finishCast])
 
-  // ポインタ → マップ%（拡大スクロール後の world 矩形基準）
+  // ポインタ → マップ%（縦長 world 矩形基準）
   const clientToMap = (clientX: number, clientY: number) => {
     const el = worldRef.current
     if (!el) return null
@@ -124,7 +122,6 @@ export function Scene2D() {
     const onClick = (e: PointerEvent) => {
       const state = useGameStore.getState()
       if (state.phase !== 'idle') return
-      // UI 上のクリックは無視
       const t = e.target as HTMLElement | null
       if (t?.closest?.('.overlay, button, .title-card, .result-card')) return
       const p = clientToMap(e.clientX, e.clientY)
@@ -147,11 +144,18 @@ export function Scene2D() {
     let raf = 0
     let last = performance.now()
     let bite = 0
-
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
       const state = useGameStore.getState()
+      // スマホ縦向きはややコンパクトなスケール
+      const portrait =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(max-aspect-ratio: 3/4)').matches
+      const scaleX = portrait ? 1.02 : MAP.mapScaleX
+      const scaleY = portrait ? 2.7 : MAP.mapScaleY
+      // 縦に長い分、Y移動を見た目等速に近づける
+      const ySpeedScale = scaleX / scaleY
 
       if (state.canMove()) {
         let dx = 0
@@ -163,7 +167,7 @@ export function Scene2D() {
         if (dx !== 0 || dy !== 0) {
           const len = Math.hypot(dx, dy) || 1
           dx = (dx / len) * MAP.playerSpeed * dt
-          dy = (dy / len) * MAP.playerSpeed * dt
+          dy = (dy / len) * MAP.playerSpeed * dt * ySpeedScale
           const from = { x: playerPose.x, y: playerPose.y }
           const next = clampWalk(
             playerPose.x + dx,
@@ -179,21 +183,33 @@ export function Scene2D() {
         }
       }
 
-      // カメラ: プレイヤー追従＋端でマップ見切れが出ないようクランプ
-      const target = clampCamera(playerPose.x, playerPose.y, MAP_SCALE)
+      // カメラ: プレイヤー追従＋端クランプ（縦長スケール対応）
+      const target = clampCamera(
+        playerPose.x,
+        playerPose.y,
+        scaleX,
+        scaleY,
+      )
       camRef.current.x += (target.x - camRef.current.x) * 0.14
       camRef.current.y += (target.y - camRef.current.y) * 0.14
-      const cam = clampCamera(camRef.current.x, camRef.current.y, MAP_SCALE)
+      const cam = clampCamera(
+        camRef.current.x,
+        camRef.current.y,
+        scaleX,
+        scaleY,
+      )
       camRef.current.x = cam.x
       camRef.current.y = cam.y
       if (rootRef.current) {
         rootRef.current.style.setProperty('--px', cam.x.toFixed(2))
         rootRef.current.style.setProperty('--py', cam.y.toFixed(2))
-        rootRef.current.style.setProperty('--map-scale', String(MAP_SCALE))
+        rootRef.current.style.setProperty('--map-scale-x', String(scaleX))
+        rootRef.current.style.setProperty('--map-scale-y', String(scaleY))
       }
 
       if (playerEl.current && !underwater) {
-        const scale = 0.48 + playerPose.y * 0.0035
+        // 画面内の遠近感用。マップ全体 y ではなく「画面内の相対」で軽く変化
+        const scale = 0.55 + (playerPose.y % 34) * 0.004
         playerEl.current.style.left = `${playerPose.x}%`
         playerEl.current.style.top = `${playerPose.y}%`
         playerEl.current.style.transform = `translate(-50%, -85%) scaleX(${
@@ -231,7 +247,7 @@ export function Scene2D() {
         ? 'brightness(0.88) sepia(0.22) saturate(1.12)'
         : 'brightness(1) saturate(1)'
 
-  const sceneClass = `scene2d iso${isPixel ? ' style-pixel' : ' style-illustration'}${
+  const sceneClass = `scene2d iso tall-map${isPixel ? ' style-pixel' : ' style-illustration'}${
     underwater ? ' underwater' : ''
   }`
 
@@ -268,12 +284,17 @@ export function Scene2D() {
   return (
     <div className={sceneClass} ref={rootRef} style={{ filter: timeFilter }}>
       <div className="scene2d-world" ref={worldRef}>
-        <img
-          className="scene2d-bg"
-          src={art.bgCamp}
-          alt="はじまりキャンプ"
-          draggable={false}
-        />
+        <div className="map-panels" aria-hidden>
+          {PANEL_ORDER.map((id) => (
+            <img
+              key={id}
+              className={`map-panel map-panel-${id}`}
+              src={art.panels[id]}
+              alt=""
+              draggable={false}
+            />
+          ))}
+        </div>
         <div className="water-shimmer iso-shimmer" aria-hidden />
 
         {showAim && (

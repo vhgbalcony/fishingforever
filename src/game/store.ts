@@ -195,7 +195,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       castZone: null,
       nearWater: isNearWater(spawn),
       message:
-        '広いキャンプを探索。川は橋で渡れる。水際でクリック／スペースでキャスト',
+        '上流→中流→下流を縦に探索。川は橋で渡れる。水際でクリック／スペースでキャスト',
       activeSpecies: null,
       pendingLengthCm: null,
       pendingFishScale: 1,

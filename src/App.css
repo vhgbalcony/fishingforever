@@ -23,24 +23,53 @@
   will-change: transform;
 }
 
-/* アイソメ: マップを拡大し、--px/--py でプレイヤー中心スクロール
-   端の見切れは JS 側 clampCamera で防止（ブラウザ限界ではない） */
+/* アイソメ縦長マップ: 横〜1.1倍 / 縦〜2.85倍（3パネル）
+   端の見切れは JS 側 clampCamera で防止 */
 .scene2d.iso {
-  --px: 50;
-  --py: 55;
-  --map-scale: 1.42;
+  --px: 32;
+  --py: 52;
+  --map-scale-x: 1.08;
+  --map-scale-y: 2.85;
 }
 
 .scene2d.iso .scene2d-world {
   inset: auto;
-  width: calc(100% * var(--map-scale));
-  height: calc(100% * var(--map-scale));
-  left: calc(50% - var(--px) * 1% * var(--map-scale));
-  top: calc(50% - var(--py) * 1% * var(--map-scale));
+  width: calc(100% * var(--map-scale-x));
+  height: calc(100% * var(--map-scale-y));
+  left: calc(50% - var(--px) * 1% * var(--map-scale-x));
+  top: calc(50% - var(--py) * 1% * var(--map-scale-y));
   transform: none;
   will-change: left, top;
-  /* わずかなぼかしよりシャープ優先 */
   image-rendering: auto;
+}
+
+/* 縦3パネル連結 */
+.map-panels {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+
+.map-panel {
+  display: block;
+  width: 100%;
+  height: calc(100% / 3);
+  object-fit: cover;
+  object-position: center center;
+  flex: 0 0 calc(100% / 3);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* パネル境界をわずかに溶かす */
+.map-panel-middle {
+  margin-top: -1px;
+  margin-bottom: -1px;
 }
 
 .scene2d-bg {
@@ -52,7 +81,6 @@
   object-position: center center;
   user-select: none;
   pointer-events: none;
-  /* 引き伸ばし時も少しマシに */
   image-rendering: auto;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
@@ -175,11 +203,30 @@
 }
 
 .water-shimmer.iso-shimmer {
-  left: 20%;
-  top: 22%;
-  width: 65%;
-  height: 55%;
-  opacity: 0.55;
+  left: 28%;
+  top: 8%;
+  width: 44%;
+  height: 84%;
+  opacity: 0.4;
+  border-radius: 45%;
+}
+
+/* スマホ縦向き: マップ横スケールを少し抑えて余白感を減らす */
+@media (max-aspect-ratio: 3/4) {
+  .scene2d.iso {
+    --map-scale-x: 1.02;
+    --map-scale-y: 2.7;
+  }
+
+  .scene2d.iso .player-sprite.iso-player {
+    width: min(18vw, 88px);
+  }
+
+  .shore-hint {
+    right: 0.6rem;
+    bottom: 6.2rem;
+    font-size: 0.7rem;
+  }
 }
 
 .fight-fish.mystery {
