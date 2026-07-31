@@ -11,6 +11,7 @@ import {
 import type {
   CaughtFish,
   EncyclopediaEntry,
+  FightMode,
   FishSpecies,
   GamePhase,
   Season,
@@ -71,6 +72,22 @@ function saveEncyclopedia(data: Record<string, EncyclopediaEntry>) {
 
 export type CastPoint = Point
 
+/** 暴れ時間（秒）— 大きい魚ほど少し長い */
+function runDurationSec(species: FishSpecies): number {
+  return 1.35 + species.fightSec * 0.08 + Math.random() * 0.45
+}
+
+/** 休憩の猶予（秒）— この間に引く */
+function restDurationSec(species: FishSpecies): number {
+  return 1.7 + Math.min(1.1, species.hookWindowSec * 0.35) + Math.random() * 0.4
+}
+
+/** 1回の引きで進む量。fightSec が長いほど多く引く必要あり */
+function pullGain(species: FishSpecies): number {
+  // fightSec 5 → 約0.40（3回前後） / 10 → 約0.22（5回前後）
+  return 1 / Math.max(2.4, species.fightSec / 2.15)
+}
+
 interface GameState {
   phase: GamePhase
   season: Season
@@ -93,7 +110,14 @@ interface GameState {
   /** 表示スケール 0.4〜1.45 */
   pendingFishScale: number
   biteProgress: number
+  /** 0〜1 寄せ具合。1で釣り上げ */
   fightProgress: number
+  /** 暴れてる / 休んでる */
+  fightMode: FightMode
+  /** 現在モードの残り秒 */
+  fightModeTimer: number
+  /** 現在モードの長さ（秒・メーター用） */
+  fightModeDuration: number
   lastCatch: CaughtFish | null
   message: string
   encyclopedia: Record<string, EncyclopediaEntry>
@@ -109,6 +133,8 @@ interface GameState {
   tryHook: () => void
   missHook: () => void
   tickFight: (dt: number) => void
+  /** 休憩中にラインを寄せる */
+  pullLine: () => void
   finishFight: () => void
   keepCatch: () => void
   releaseCatch: () => void
@@ -166,6 +192,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   pendingFishScale: 1,
   biteProgress: 0,
   fightProgress: 0,
+  fightMode: 'running',
+  fightModeTimer: 0,
+  fightModeDuration: 1,
   lastCatch: null,
   message: '',
   encyclopedia: loadEncyclopedia(),
@@ -201,6 +230,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       pendingFishScale: 1,
       lastCatch: null,
       fightProgress: 0,
+      fightMode: 'running',
+      fightModeTimer: 0,
+      fightModeDuration: 1,
       biteProgress: 0,
     })
   },
@@ -270,6 +302,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       pendingFishScale: 1,
       biteProgress: 0,
       fightProgress: 0,
+      fightMode: 'running',
+      fightModeTimer: 0,
+      fightModeDuration: 1,
     })
   },
 
@@ -338,12 +373,16 @@ export const useGameStore = create<GameState>((set, get) => ({
         : lengthCm >= activeSpecies.avgLengthCm * 1.2
           ? 'ずしり重い！'
           : '引きを楽しもう…'
+    const runSec = runDurationSec(activeSpecies)
     set({
       phase: 'underwater_fight',
       fightProgress: 0,
+      fightMode: 'running',
+      fightModeTimer: runSec,
+      fightModeDuration: runSec,
       pendingLengthCm: lengthCm,
       pendingFishScale: scale,
-      message: `掛かった！ ${sizeHint}`,
+      message: `掛かった！ ${sizeHint} まず暴れる…休んだら引こう`,
     })
   },
 
@@ -357,17 +396,79 @@ export const useGameStore = create<GameState>((set, get) => ({
       pendingLengthCm: null,
       pendingFishScale: 1,
       biteProgress: 0,
+      fightMode: 'running',
+      fightModeTimer: 0,
+      fightModeDuration: 1,
       castPoint: null,
       castZone: null,
     })
   },
 
   tickFight: (dt: number) => {
-    const { phase, activeSpecies, fightProgress } = get()
+    const { phase, activeSpecies, fightMode, fightModeTimer, fightProgress } =
+      get()
     if (phase !== 'underwater_fight' || !activeSpecies) return
-    const next = Math.min(1, fightProgress + dt / activeSpecies.fightSec)
-    set({ fightProgress: next })
-    if (next >= 1) get().finishFight()
+
+    const nextTimer = fightModeTimer - dt
+    if (nextTimer > 0) {
+      set({ fightModeTimer: nextTimer })
+      return
+    }
+
+    if (fightMode === 'running') {
+      const restSec = restDurationSec(activeSpecies)
+      set({
+        fightMode: 'resting',
+        fightModeTimer: restSec,
+        fightModeDuration: restSec,
+        message: '疲れて休んだ！ 今だ、引け！',
+      })
+      return
+    }
+
+    // 休憩しきった → また逃げる（引かなかった）
+    const slip = Math.min(0.12, fightProgress * 0.15)
+    const runSec = runDurationSec(activeSpecies)
+    set({
+      fightMode: 'running',
+      fightModeTimer: runSec,
+      fightModeDuration: runSec,
+      fightProgress: Math.max(0, fightProgress - slip),
+      message: 'また走り出した… 次の休みを待て',
+    })
+  },
+
+  pullLine: () => {
+    const { phase, activeSpecies, fightMode, fightProgress } = get()
+    if (phase !== 'underwater_fight' || !activeSpecies) return
+
+    if (fightMode === 'running') {
+      set({ message: 'まだ暴れてる！ 休むのを待って' })
+      return
+    }
+
+    const gain = pullGain(activeSpecies) * (0.92 + Math.random() * 0.16)
+    const next = Math.min(1, fightProgress + gain)
+    if (next >= 1) {
+      get().finishFight()
+      return
+    }
+
+    // 寄せたあとすぐまた走る（駆け引きのリズム）
+    const runSec =
+      runDurationSec(activeSpecies) * (0.75 + Math.random() * 0.35)
+    set({
+      fightProgress: next,
+      fightMode: 'running',
+      fightModeTimer: runSec,
+      fightModeDuration: runSec,
+      message:
+        next >= 0.7
+          ? 'もう少し！ まだ走る…'
+          : next >= 0.35
+            ? '寄せた！ また走る…'
+            : 'ラインを寄せた！ また暴れる…',
+    })
   },
 
   finishFight: () => {
@@ -390,6 +491,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       lastCatch: catchData,
       message: '釣り上げた！',
       fightProgress: 1,
+      fightMode: 'resting',
+      fightModeTimer: 0,
+      fightModeDuration: 1,
     })
   },
 
@@ -411,6 +515,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       pendingLengthCm: null,
       pendingFishScale: 1,
       fightProgress: 0,
+      fightMode: 'running',
+      fightModeTimer: 0,
+      fightModeDuration: 1,
       biteProgress: 0,
       castPoint: null,
       castZone: null,
@@ -436,6 +543,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       pendingLengthCm: null,
       pendingFishScale: 1,
       fightProgress: 0,
+      fightMode: 'running',
+      fightModeTimer: 0,
+      fightModeDuration: 1,
       biteProgress: 0,
       castPoint: null,
       castZone: null,

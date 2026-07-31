@@ -8,6 +8,9 @@ export type GamePhase =
   | 'underwater_fight'
   | 'catch_result'
 
+/** 水中ファイト最小：逃げる ↔ 休む（休むときだけ引ける） */
+export type FightMode = 'running' | 'resting'
+
 export type TimeOfDay = 'morning' | 'day' | 'evening'
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter'

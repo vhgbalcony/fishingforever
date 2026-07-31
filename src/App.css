@@ -324,6 +324,22 @@
   transform-origin: center center;
 }
 
+/* 暴れてる：激しく動く */
+.fight-fish.thrashing {
+  animation: fight-thrash 0.45s ease-in-out infinite;
+  filter: drop-shadow(0 12px 28px rgba(0, 40, 50, 0.5)) saturate(1.05);
+}
+
+/* 休んでる：ゆっくり・引ける合図 */
+.fight-fish.resting {
+  animation: fight-rest 2.8s ease-in-out infinite;
+  filter: drop-shadow(0 8px 18px rgba(80, 180, 160, 0.35)) brightness(1.06);
+}
+
+.fight-fish.landed {
+  animation: fight-swim 2.4s ease-in-out infinite;
+}
+
 @keyframes fight-swim {
   0%,
   100% {
@@ -333,6 +349,37 @@
   50% {
     transform: translate(-50%, calc(-50% - 14px)) scale(var(--fish-scale, 1))
       rotate(3deg) translateX(10px);
+  }
+}
+
+@keyframes fight-thrash {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(var(--fish-scale, 1)) rotate(-12deg)
+      translateX(-18px);
+  }
+  25% {
+    transform: translate(-50%, calc(-50% - 22px)) scale(var(--fish-scale, 1))
+      rotate(8deg) translateX(14px);
+  }
+  50% {
+    transform: translate(-50%, calc(-50% + 6px)) scale(var(--fish-scale, 1))
+      rotate(-6deg) translateX(20px);
+  }
+  75% {
+    transform: translate(-50%, calc(-50% - 16px)) scale(var(--fish-scale, 1))
+      rotate(14deg) translateX(-12px);
+  }
+}
+
+@keyframes fight-rest {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(var(--fish-scale, 1)) rotate(-2deg);
+  }
+  50% {
+    transform: translate(-50%, calc(-50% - 6px)) scale(var(--fish-scale, 1))
+      rotate(2deg);
   }
 }
 
@@ -659,6 +706,57 @@
 
 .meter-fill.fight {
   background: linear-gradient(90deg, #4ecdc4, #44a08d);
+}
+
+.fight-meter .mode-track {
+  height: 7px;
+  margin-bottom: 0.35rem;
+  opacity: 0.95;
+}
+
+.meter-fill.mode.running {
+  background: linear-gradient(90deg, #ff8a65, #e53935);
+  transition: width 0.08s linear;
+}
+
+.meter-fill.mode.resting {
+  background: linear-gradient(90deg, #81c784, #26a69a);
+  transition: width 0.08s linear;
+}
+
+.fight-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
+.fight-meter.can-pull {
+  outline: 2px solid rgba(127, 212, 200, 0.55);
+  outline-offset: 6px;
+  border-radius: 0.85rem;
+  padding: 0.35rem 0.5rem 0.5rem;
+  background: rgba(6, 28, 30, 0.35);
+}
+
+.fight-meter.can-pull .btn.danger {
+  animation: pull-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes pull-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(253, 160, 133, 0.35);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 8px rgba(253, 160, 133, 0);
+  }
+}
+
+.fight-meter .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* Result */

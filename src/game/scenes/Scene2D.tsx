@@ -49,6 +49,7 @@ export function Scene2D() {
   const aimY = useGameStore((s) => s.aimY)
   const nearWater = useGameStore((s) => s.nearWater)
   const pendingFishScale = useGameStore((s) => s.pendingFishScale)
+  const fightMode = useGameStore((s) => s.fightMode)
   const setPlayerPose = useGameStore((s) => s.setPlayerPose)
   const setAim = useGameStore((s) => s.setAim)
   const castAt = useGameStore((s) => s.castAt)
@@ -263,7 +264,11 @@ export function Scene2D() {
         <div className="water-rays" />
         {activeSpecies && (
           <img
-            className="fight-fish mystery"
+            className={
+              phase === 'underwater_fight'
+                ? `fight-fish mystery ${fightMode === 'running' ? 'thrashing' : 'resting'}`
+                : 'fight-fish mystery landed'
+            }
             src={fishArt(activeSpecies.id, artStyle)}
             alt="掛かった魚"
             draggable={false}

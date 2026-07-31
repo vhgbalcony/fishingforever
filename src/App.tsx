@@ -9,6 +9,7 @@ function useInputBindings() {
   const phase = useGameStore((s) => s.phase)
   const cast = useGameStore((s) => s.cast)
   const tryHook = useGameStore((s) => s.tryHook)
+  const pullLine = useGameStore((s) => s.pullLine)
   const dismissResult = useGameStore((s) => s.dismissResult)
   const startGame = useGameStore((s) => s.startGame)
 
@@ -19,11 +20,12 @@ function useInputBindings() {
       if (phase === 'title') startGame()
       else if (phase === 'idle') cast()
       else if (phase === 'float_sinking') tryHook()
+      else if (phase === 'underwater_fight') pullLine()
       else if (phase === 'catch_result') dismissResult() // キープ
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, cast, tryHook, dismissResult, startGame])
+  }, [phase, cast, tryHook, pullLine, dismissResult, startGame])
 }
 
 export default function App() {

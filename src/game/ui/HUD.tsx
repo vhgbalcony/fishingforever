@@ -54,6 +54,9 @@ export function HUD() {
   const timeOfDay = useGameStore((s) => s.timeOfDay)
   const biteProgress = useGameStore((s) => s.biteProgress)
   const fightProgress = useGameStore((s) => s.fightProgress)
+  const fightMode = useGameStore((s) => s.fightMode)
+  const fightModeTimer = useGameStore((s) => s.fightModeTimer)
+  const fightModeDuration = useGameStore((s) => s.fightModeDuration)
   const encyclopedia = useGameStore((s) => s.encyclopedia)
   const nearWater = useGameStore((s) => s.nearWater)
   const aimZone = useGameStore((s) => s.aimZone)
@@ -61,6 +64,7 @@ export function HUD() {
   const artStyle = useGameStore((s) => s.artStyle)
   const cast = useGameStore((s) => s.cast)
   const tryHook = useGameStore((s) => s.tryHook)
+  const pullLine = useGameStore((s) => s.pullLine)
   const cycleTimeOfDay = useGameStore((s) => s.cycleTimeOfDay)
   const startGame = useGameStore((s) => s.startGame)
 
@@ -138,14 +142,45 @@ export function HUD() {
       )}
 
       {phase === 'underwater_fight' && (
-        <div className="fight-meter">
-          <div className="bite-label">ファイト中 — なにが掛かった…？</div>
-          <div className="meter-track">
+        <div
+          className={`fight-meter${fightMode === 'resting' ? ' can-pull' : ' is-running'}`}
+        >
+          <div className="bite-label">
+            {fightMode === 'running'
+              ? '暴れている… 休むまで待て'
+              : '休んだ！ 今だ、引け！'}
+          </div>
+          <div className="meter-track" title="寄せ具合">
             <div
               className="meter-fill fight"
               style={{ width: `${fightProgress * 100}%` }}
             />
           </div>
+          <div className="meter-track mode-track" title="いまの動き">
+            <div
+              className={`meter-fill mode ${fightMode}`}
+              style={{
+                width: `${
+                  fightModeDuration > 0
+                    ? Math.min(100, (fightModeTimer / fightModeDuration) * 100)
+                    : 0
+                }%`,
+              }}
+            />
+          </div>
+          <p className="fight-hint">
+            {fightMode === 'running'
+              ? '上：寄せ具合　下：暴れ残り'
+              : '上：寄せ具合　下：休み残り（Space / 引く）'}
+          </p>
+          <button
+            type="button"
+            className={`btn ${fightMode === 'resting' ? 'danger' : 'ghost'}`}
+            onClick={pullLine}
+            disabled={fightMode === 'running'}
+          >
+            {fightMode === 'resting' ? '引く！' : 'まだ暴れてる…'}
+          </button>
         </div>
       )}
 
