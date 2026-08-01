@@ -708,6 +708,36 @@
   background: linear-gradient(90deg, #4ecdc4, #44a08d);
 }
 
+.meter-fill.fight.mid {
+  background: linear-gradient(90deg, #ffd54f, #ffb300);
+}
+
+.meter-fill.fight.low {
+  background: linear-gradient(90deg, #ff8a65, #e53935);
+}
+
+.fight-pct {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
+.fight-meter.critical .fight-pct {
+  color: #ffab91;
+  font-weight: 700;
+}
+
+.btn.warn {
+  background: rgba(255, 138, 101, 0.2);
+  border: 1px solid rgba(255, 138, 101, 0.55);
+  color: #ffe0d4;
+}
+
+.btn.warn:hover {
+  background: rgba(255, 138, 101, 0.35);
+}
+
 .fight-meter .mode-track {
   height: 7px;
   margin-bottom: 0.35rem;
@@ -757,6 +787,10 @@
 .fight-meter .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.fight-meter.is-running .btn.warn {
+  opacity: 0.92;
 }
 
 /* Result */

@@ -143,7 +143,13 @@ export function HUD() {
 
       {phase === 'underwater_fight' && (
         <div
-          className={`fight-meter${fightMode === 'resting' ? ' can-pull' : ' is-running'}`}
+          className={`fight-meter${
+            fightMode === 'resting'
+              ? ' can-pull'
+              : fightProgress < 0.15
+                ? ' is-running critical'
+                : ' is-running'
+          }`}
         >
           <div className="bite-label">
             {fightMode === 'running'
@@ -152,10 +158,20 @@ export function HUD() {
           </div>
           <div className="meter-track" title="寄せ具合">
             <div
-              className="meter-fill fight"
-              style={{ width: `${fightProgress * 100}%` }}
+              className={`meter-fill fight${
+                fightProgress < 0.15
+                  ? ' low'
+                  : fightProgress < 0.28
+                    ? ' mid'
+                    : ''
+              }`}
+              style={{ width: `${Math.max(0, Math.min(1, fightProgress)) * 100}%` }}
             />
           </div>
+          <p className="fight-pct" aria-live="polite">
+            寄せ {Math.round(Math.max(0, fightProgress) * 100)}
+            {fightProgress < 0.15 ? ' ⚠ 危険' : ''}
+          </p>
           <div className="meter-track mode-track" title="いまの動き">
             <div
               className={`meter-fill mode ${fightMode}`}
@@ -170,16 +186,15 @@ export function HUD() {
           </div>
           <p className="fight-hint">
             {fightMode === 'running'
-              ? '上：寄せ具合　下：暴れ残り'
+              ? '上：寄せ（0未満で逃げ）　暴れ中に引くと減る'
               : '上：寄せ具合　下：休み残り（Space / 引く）'}
           </p>
           <button
             type="button"
-            className={`btn ${fightMode === 'resting' ? 'danger' : 'ghost'}`}
+            className={`btn ${fightMode === 'resting' ? 'danger' : 'warn'}`}
             onClick={pullLine}
-            disabled={fightMode === 'running'}
           >
-            {fightMode === 'resting' ? '引く！' : 'まだ暴れてる…'}
+            {fightMode === 'resting' ? '引く！' : '無理に引く（危険）'}
           </button>
         </div>
       )}

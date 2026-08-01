@@ -248,3 +248,13 @@
 - 魚アニメ本格はまだ。見た目は thrash / rest のCSS差のみ
 - **まだ:** ウキツンツン、魚ごとの難易度深掘り、マップ判定
 - 触る場所: `store.ts`（`tickFight` / `pullLine`）、`HUD.tsx`、`Scene2D.tsx`、`App.css`
+
+### 実装メモ（2026-08-01）— 誤引きペナルティ＆逃げ
+
+- ヒット時の寄せは **約 12〜34%**（中心〜20%、魚の `fightSec` で差）
+- **休み中に引く** → 寄せ↑（100%で釣果）
+- **暴れ中に引く** → 寄せ↓（だいたい −9〜−16%/回）。**0未満で逃げて岸へ**
+- 休み逃しの減りは 0 で止める（逃げは「無理引き」専用）
+- 参考: [川のぬし釣り2 攻略（おゆるり）](https://oyururi.info/game-retro-20210914-1/)  
+  （原作は逃げ中の一瞬引きが有効な場合あり。本ゲームはわかりやすさ優先で「暴れ中は危険」）
+- 図鑑参考: [1](https://oyururi.info/kawanonushitsuri2-sakanazukan1/) [2](https://oyururi.info/kawanonushitsuri2-sakanazukan2/) [3](https://oyururi.info/kawanonushitsuri2-sakanazukan3/)
