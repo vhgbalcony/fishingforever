@@ -57,6 +57,7 @@ export function HUD() {
   const fightMode = useGameStore((s) => s.fightMode)
   const fightModeTimer = useGameStore((s) => s.fightModeTimer)
   const fightModeDuration = useGameStore((s) => s.fightModeDuration)
+  const pullHeld = useGameStore((s) => s.pullHeld)
   const encyclopedia = useGameStore((s) => s.encyclopedia)
   const nearWater = useGameStore((s) => s.nearWater)
   const aimZone = useGameStore((s) => s.aimZone)
@@ -64,7 +65,7 @@ export function HUD() {
   const artStyle = useGameStore((s) => s.artStyle)
   const cast = useGameStore((s) => s.cast)
   const tryHook = useGameStore((s) => s.tryHook)
-  const pullLine = useGameStore((s) => s.pullLine)
+  const setPullHeld = useGameStore((s) => s.setPullHeld)
   const cycleTimeOfDay = useGameStore((s) => s.cycleTimeOfDay)
   const startGame = useGameStore((s) => s.startGame)
 
@@ -149,12 +150,16 @@ export function HUD() {
               : fightProgress < 0.15
                 ? ' is-running critical'
                 : ' is-running'
-          }`}
+          }${pullHeld ? ' holding' : ''}`}
         >
           <div className="bite-label">
             {fightMode === 'running'
-              ? '暴れている… 休むまで待て'
-              : '休んだ！ 今だ、引け！'}
+              ? pullHeld
+                ? '無理引き中！ すぐ離せ！'
+                : '暴れている… 休むまで待て'
+              : pullHeld
+                ? '寄せている… 長押しキープ'
+                : '休んだ！ 長押しで引け！'}
           </div>
           <div className="meter-track" title="寄せ具合">
             <div
@@ -165,12 +170,15 @@ export function HUD() {
                     ? ' mid'
                     : ''
               }`}
-              style={{ width: `${Math.max(0, Math.min(1, fightProgress)) * 100}%` }}
+              style={{
+                width: `${Math.max(0, Math.min(1, fightProgress)) * 100}%`,
+              }}
             />
           </div>
           <p className="fight-pct" aria-live="polite">
             寄せ {Math.round(Math.max(0, fightProgress) * 100)}
             {fightProgress < 0.15 ? ' ⚠ 危険' : ''}
+            {pullHeld ? ' · 引中' : ''}
           </p>
           <div className="meter-track mode-track" title="いまの動き">
             <div
@@ -186,15 +194,39 @@ export function HUD() {
           </div>
           <p className="fight-hint">
             {fightMode === 'running'
-              ? '上：寄せ（0未満で逃げ）　暴れ中に引くと減る'
-              : '上：寄せ具合　下：休み残り（Space / 引く）'}
+              ? '長押し＝引く。暴れ中はすぐ離す（0未満で逃げ）'
+              : 'Space / ボタンを長押しして寄せる'}
           </p>
           <button
             type="button"
-            className={`btn ${fightMode === 'resting' ? 'danger' : 'warn'}`}
-            onClick={pullLine}
+            className={`btn ${
+              fightMode === 'resting'
+                ? pullHeld
+                  ? 'danger holding-btn'
+                  : 'danger'
+                : pullHeld
+                  ? 'warn holding-btn'
+                  : 'warn'
+            }`}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              ;(e.currentTarget as HTMLButtonElement).setPointerCapture(
+                e.pointerId,
+              )
+              setPullHeld(true)
+            }}
+            onPointerUp={() => setPullHeld(false)}
+            onPointerCancel={() => setPullHeld(false)}
+            onLostPointerCapture={() => setPullHeld(false)}
+            onContextMenu={(e) => e.preventDefault()}
           >
-            {fightMode === 'resting' ? '引く！' : '無理に引く（危険）'}
+            {fightMode === 'resting'
+              ? pullHeld
+                ? '引いてる…'
+                : '長押しで引く'
+              : pullHeld
+                ? '離して！'
+                : '長押しは危険'}
           </button>
         </div>
       )}

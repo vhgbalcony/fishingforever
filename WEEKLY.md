@@ -258,3 +258,12 @@
 - 参考: [川のぬし釣り2 攻略（おゆるり）](https://oyururi.info/game-retro-20210914-1/)  
   （原作は逃げ中の一瞬引きが有効な場合あり。本ゲームはわかりやすさ優先で「暴れ中は危険」）
 - 図鑑参考: [1](https://oyururi.info/kawanonushitsuri2-sakanazukan1/) [2](https://oyururi.info/kawanonushitsuri2-sakanazukan2/) [3](https://oyururi.info/kawanonushitsuri2-sakanazukan3/)
+
+### 実装メモ（2026-08-06）— 長押し＋種 pullPower
+
+- **操作:** Space / ボタン **長押し**で引く（原作どおり）。keyup / pointerup で離す
+- **休み中の長押し** → 寄せがじわっと増加（種の `pullPower` で速度差）
+- **暴れ中の長押し** → 寄せがじわっと減少。**すぐ離せば軽傷**／ムズ魚は短くても危険
+- **0未満** → 「{種名}に逃げられた。」
+- 難易度の芯は `pullPower`（オイカワ 0.55 … ニジマス 1.4）。体長は弱い補正のみ
+- 竿の「小物竿に大物→理不尽切れ」は DESIGN メモのみ（未実装）

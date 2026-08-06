@@ -28,8 +28,14 @@ export interface FishSpecies {
   weightFactor: number
   /** ウキ沈み〜アワセの猶予（秒） */
   hookWindowSec: number
-  /** ファイト時間の目安（秒） */
+  /** ファイト時間の目安（秒）— 寄せに要する体感の長さ */
   fightSec: number
+  /**
+   * 引きの強さ（種の難易度の芯）。
+   * 低いほど休み長め・ミスに甘い / 高いほど休み短・無理押し即死寄り。
+   * 体長トロフィーとは別軸。
+   */
+  pullPower: number
   color: string
   accentColor: string
   /** これ未満は幼魚 */

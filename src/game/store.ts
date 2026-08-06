@@ -72,36 +72,78 @@ function saveEncyclopedia(data: Record<string, EncyclopediaEntry>) {
 
 export type CastPoint = Point
 
-/** 暴れ時間（秒）— 大きい魚ほど少し長い */
-function runDurationSec(species: FishSpecies): number {
-  return 1.35 + species.fightSec * 0.08 + Math.random() * 0.45
+/** 体長による弱い補正（種の pullPower が本体。同種の大きい個体が少しキツい） */
+function sizeFightMod(species: FishSpecies, lengthCm: number | null): number {
+  if (lengthCm == null) return 1
+  const r = lengthCm / species.avgLengthCm
+  return Math.min(1.18, Math.max(0.88, 0.72 + r * 0.28))
 }
 
-/** 休憩の猶予（秒）— この間に引く */
-function restDurationSec(species: FishSpecies): number {
-  return 1.7 + Math.min(1.1, species.hookWindowSec * 0.35) + Math.random() * 0.4
+function effectivePower(species: FishSpecies, lengthCm: number | null): number {
+  return Math.max(0.4, species.pullPower * sizeFightMod(species, lengthCm))
 }
 
-/** 1回の引きで進む量。fightSec が長いほど多く引く必要あり */
-function pullGain(species: FishSpecies): number {
-  // fightSec 5 → 約0.40（3回前後） / 10 → 約0.22（5回前後）
-  return 1 / Math.max(2.4, species.fightSec / 2.15)
+/** 暴れ時間（秒）— 引きが強いほど長め */
+function runDurationSec(
+  species: FishSpecies,
+  lengthCm: number | null,
+): number {
+  const p = effectivePower(species, lengthCm)
+  return (1.15 + species.fightSec * 0.06) * (0.85 + p * 0.2) + Math.random() * 0.4
+}
+
+/** 休憩の猶予（秒）— 引きが強いほど短い */
+function restDurationSec(
+  species: FishSpecies,
+  lengthCm: number | null,
+): number {
+  const p = effectivePower(species, lengthCm)
+  const base = 2.15 / Math.sqrt(p)
+  return Math.min(2.6, Math.max(0.85, base + Math.random() * 0.35))
 }
 
 /**
- * ヒット直後の寄せ具合（0〜1）。中心はだいたい 0.20。
- * 小さい・扱いやすい魚ほどやや高め、大物ほど低め＋ブレ。
+ * ヒット直後の寄せ（0〜1）。中心 ~0.20。
+ * 引きが弱い種・小さめ個体ほどやや有利。
  */
-function initialFightProgress(species: FishSpecies): number {
-  const ease = (12 - species.fightSec) / 12 // 5→0.58 / 10→0.17
-  const base = 0.14 + ease * 0.14 // おおよそ 0.16〜0.28
-  const jitter = (Math.random() - 0.5) * 0.07
-  return Math.min(0.34, Math.max(0.12, base + jitter))
+function initialFightProgress(
+  species: FishSpecies,
+  lengthCm: number | null,
+): number {
+  const p = effectivePower(species, lengthCm)
+  const base = 0.28 - p * 0.07
+  const jitter = (Math.random() - 0.5) * 0.06
+  return Math.min(0.36, Math.max(0.11, base + jitter))
 }
 
-/** 暴れ中に無理引きしたときの減り。2〜3回で危なくなる想定 */
-function wrongPullPenalty(species: FishSpecies): number {
-  return 0.085 + species.fightSec * 0.0055 + Math.random() * 0.035
+/** 休み中に長押ししているときの寄せ速度（/秒） */
+function restPullRatePerSec(
+  species: FishSpecies,
+  lengthCm: number | null,
+): number {
+  const p = effectivePower(species, lengthCm)
+  // おおよそ 2〜5 秒相当の長押しで満タン付近（休みの合間に分割）
+  return 0.28 / p
+}
+
+/** 暴れ中に長押ししているときの減り速度（/秒）。すぐ離せば軽い傷で済む */
+function wrongHoldRatePerSec(
+  species: FishSpecies,
+  lengthCm: number | null,
+): number {
+  const p = effectivePower(species, lengthCm)
+  // オイカワ寄り: ゆっくり減 / ニジマス: 短押しでも危険
+  return 0.1 + p * 0.32
+}
+
+/** 休みを丸ごと逃したときの減り */
+function restMissSlip(
+  species: FishSpecies,
+  lengthCm: number | null,
+  progress: number,
+): number {
+  const p = effectivePower(species, lengthCm)
+  return Math.min(0.14, 0.04 + progress * 0.08 * p)
 }
 
 function resetFightFields() {
@@ -113,11 +155,15 @@ function resetFightFields() {
     fightMode: 'running' as FightMode,
     fightModeTimer: 0,
     fightModeDuration: 1,
+    pullHeld: false,
     biteProgress: 0,
     castPoint: null as CastPoint | null,
     castZone: null as StreamZone | null,
   }
 }
+
+/** 危険メッセージのスパム防止 */
+let lastDangerMsgAt = 0
 
 interface GameState {
   phase: GamePhase
@@ -149,6 +195,8 @@ interface GameState {
   fightModeTimer: number
   /** 現在モードの長さ（秒・メーター用） */
   fightModeDuration: number
+  /** 引くボタン／Space を長押し中か */
+  pullHeld: boolean
   lastCatch: CaughtFish | null
   message: string
   encyclopedia: Record<string, EncyclopediaEntry>
@@ -164,7 +212,9 @@ interface GameState {
   tryHook: () => void
   missHook: () => void
   tickFight: (dt: number) => void
-  /** 休み中＝寄せ / 暴れ中＝無理引きペナルティ */
+  /** 長押し開始／終了（原作は引っ張り＝押し続け） */
+  setPullHeld: (held: boolean) => void
+  /** @deprecated 互換: 押した瞬間だけ。長押しは setPullHeld を使う */
   pullLine: () => void
   /** 寄せがマイナス → 逃げて岸へ */
   escapeFight: () => void
@@ -228,6 +278,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   fightMode: 'running',
   fightModeTimer: 0,
   fightModeDuration: 1,
+  pullHeld: false,
   lastCatch: null,
   message: '',
   encyclopedia: loadEncyclopedia(),
@@ -266,6 +317,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       fightMode: 'running',
       fightModeTimer: 0,
       fightModeDuration: 1,
+      pullHeld: false,
       biteProgress: 0,
     })
   },
@@ -338,6 +390,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       fightMode: 'running',
       fightModeTimer: 0,
       fightModeDuration: 1,
+      pullHeld: false,
     })
   },
 
@@ -406,17 +459,19 @@ export const useGameStore = create<GameState>((set, get) => ({
         : lengthCm >= activeSpecies.avgLengthCm * 1.2
           ? 'ずしり重い！'
           : '引きを楽しもう…'
-    const runSec = runDurationSec(activeSpecies)
-    const startProgress = initialFightProgress(activeSpecies)
+    const runSec = runDurationSec(activeSpecies, lengthCm)
+    const startProgress = initialFightProgress(activeSpecies, lengthCm)
+    lastDangerMsgAt = 0
     set({
       phase: 'underwater_fight',
       fightProgress: startProgress,
       fightMode: 'running',
       fightModeTimer: runSec,
       fightModeDuration: runSec,
+      pullHeld: false,
       pendingLengthCm: lengthCm,
       pendingFishScale: scale,
-      message: `掛かった！ ${sizeHint} 休んでから引こう（暴れ中は危険）`,
+      message: `掛かった！ ${sizeHint} 休み中に長押しで寄せよう（暴れ中はすぐ離せ）`,
     })
   },
 
@@ -431,95 +486,134 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   tickFight: (dt: number) => {
-    const { phase, activeSpecies, fightMode, fightModeTimer, fightProgress } =
-      get()
+    const {
+      phase,
+      activeSpecies,
+      fightMode,
+      fightModeTimer,
+      fightProgress,
+      pullHeld,
+      pendingLengthCm,
+    } = get()
     if (phase !== 'underwater_fight' || !activeSpecies) return
 
-    const nextTimer = fightModeTimer - dt
+    // —— 長押し中の寄せ／ペナルティ ——
+    if (pullHeld) {
+      if (fightMode === 'resting') {
+        const gain =
+          restPullRatePerSec(activeSpecies, pendingLengthCm) * dt
+        const next = fightProgress + gain
+        if (next >= 1) {
+          get().finishFight()
+          return
+        }
+        set({
+          fightProgress: next,
+          message:
+            next >= 0.75
+              ? 'いいぞ、寄せてる…！ 長押しキープ'
+              : next >= 0.4
+                ? '寄せてる… 離さず引こう'
+                : 'ラインを寄せてる…',
+        })
+      } else {
+        // 暴れ中に押し続け → 減る。すぐ離せば軽傷
+        const loss =
+          wrongHoldRatePerSec(activeSpecies, pendingLengthCm) * dt
+        const next = fightProgress - loss
+        if (next < 0) {
+          get().escapeFight()
+          return
+        }
+        const now = performance.now()
+        if (now - lastDangerMsgAt > 420) {
+          lastDangerMsgAt = now
+          set({
+            fightProgress: next,
+            message:
+              next < 0.12
+                ? '離して！！ ラインが持つまい…'
+                : next < 0.22
+                  ? 'まだ暴れてる！ すぐ離せ！'
+                  : '無理引き中… すぐ離そう',
+          })
+        } else {
+          set({ fightProgress: next })
+        }
+      }
+    }
+
+    // —— 暴れ ↔ 休み の時間経過 ——
+    const { fightModeTimer: timerNow, fightProgress: progNow, fightMode: modeNow } =
+      get()
+    if (get().phase !== 'underwater_fight') return
+
+    const nextTimer = timerNow - dt
     if (nextTimer > 0) {
       set({ fightModeTimer: nextTimer })
       return
     }
 
-    if (fightMode === 'running') {
-      const restSec = restDurationSec(activeSpecies)
+    if (modeNow === 'running') {
+      const restSec = restDurationSec(activeSpecies, pendingLengthCm)
       set({
         fightMode: 'resting',
         fightModeTimer: restSec,
         fightModeDuration: restSec,
-        message: '疲れて休んだ！ 今だ、引け！',
+        message: pullHeld
+          ? '休んだ！ そのまま長押しで寄せよう'
+          : '疲れて休んだ！ 長押しで引け！',
       })
       return
     }
 
-    // 休憩しきった → また逃げる（引かなかった）。0未満にはしない
-    const slip = Math.min(0.08, fightProgress * 0.12)
-    const runSec = runDurationSec(activeSpecies)
+    // 休み終了 → また暴れる（休み逃しは減るが 0 未満にはしない）
+    const slip = restMissSlip(activeSpecies, pendingLengthCm, progNow)
+    const runSec = runDurationSec(activeSpecies, pendingLengthCm)
+    const after = Math.max(0, progNow - slip)
     set({
       fightMode: 'running',
       fightModeTimer: runSec,
       fightModeDuration: runSec,
-      fightProgress: Math.max(0, fightProgress - slip),
-      message: 'また走り出した… 次の休みを待て',
+      fightProgress: after,
+      message: pullHeld
+        ? 'また走った！ すぐ離して待て！'
+        : 'また走り出した… 次の休みを待て',
     })
   },
 
-  pullLine: () => {
-    const { phase, activeSpecies, fightMode, fightProgress } = get()
-    if (phase !== 'underwater_fight' || !activeSpecies) return
-
-    // 暴れ中に無理引き → 寄せが減る。マイナスで逃げ
-    if (fightMode === 'running') {
-      const loss = wrongPullPenalty(activeSpecies)
-      const next = fightProgress - loss
-      if (next < 0) {
-        get().escapeFight()
-        return
+  setPullHeld: (held) => {
+    const { phase } = get()
+    if (phase !== 'underwater_fight') {
+      if (get().pullHeld) set({ pullHeld: false })
+      return
+    }
+    set({ pullHeld: held })
+    if (!held && get().fightMode === 'running') {
+      // 離したとき、少し安心メッセージ
+      const p = get().fightProgress
+      if (p >= 0 && p < 0.35) {
+        set({ message: '離した。休みを待とう…' })
       }
-      const danger =
-        next < 0.12
-          ? '危うい…！ もう無理は禁物'
-          : next < 0.22
-            ? 'ラインが危ない！ 休むまで待て'
-            : 'まだ暴れてる！ 寄せが戻った…'
-      set({
-        fightProgress: next,
-        message: danger,
-      })
-      return
     }
+  },
 
-    const gain = pullGain(activeSpecies) * (0.92 + Math.random() * 0.16)
-    const next = Math.min(1, fightProgress + gain)
-    if (next >= 1) {
-      get().finishFight()
-      return
-    }
-
-    // 寄せたあとすぐまた走る（駆け引きのリズム）
-    const runSec =
-      runDurationSec(activeSpecies) * (0.75 + Math.random() * 0.35)
-    set({
-      fightProgress: next,
-      fightMode: 'running',
-      fightModeTimer: runSec,
-      fightModeDuration: runSec,
-      message:
-        next >= 0.7
-          ? 'もう少し！ まだ走る…'
-          : next >= 0.4
-            ? '寄せた！ また走る…'
-            : 'ラインを寄せた！ また暴れる…',
-    })
+  pullLine: () => {
+    // 互換: クリック一発でも「短く押した」扱いに近づける
+    const { phase } = get()
+    if (phase !== 'underwater_fight') return
+    get().setPullHeld(true)
+    // 次フレーム以降 tick が効く。ボタンは pointer で up を取る想定
   },
 
   escapeFight: () => {
     if (get().phase !== 'underwater_fight') return
     clearTimers()
+    const name = get().activeSpecies?.name ?? '魚'
     const aim = defaultAim({ x: playerPose.x, y: playerPose.y })
     set({
       phase: 'idle',
-      message: 'バレた…逃げられてしまった。落ち着いて再キャスト！',
+      message: `${name}に逃げられた。落ち着いて再キャスト！`,
       ...resetFightFields(),
       aimX: aim.x,
       aimY: aim.y,
@@ -551,6 +645,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       fightMode: 'resting',
       fightModeTimer: 0,
       fightModeDuration: 1,
+      pullHeld: false,
     })
   },
 
@@ -567,17 +662,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         lastCatch.lifeStage === 'juvenile'
           ? 'キープした。幼魚はリリース推奨だよ'
           : '図鑑に記録した！ WASDで探索',
-      activeSpecies: null,
+      ...resetFightFields(),
       lastCatch: null,
-      pendingLengthCm: null,
-      pendingFishScale: 1,
-      fightProgress: 0,
-      fightMode: 'running',
-      fightModeTimer: 0,
-      fightModeDuration: 1,
-      biteProgress: 0,
-      castPoint: null,
-      castZone: null,
       aimX: aim.x,
       aimY: aim.y,
       aimZone: getStreamZone(aim),
@@ -595,17 +681,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({
       phase: 'idle',
       message: note,
-      activeSpecies: null,
+      ...resetFightFields(),
       lastCatch: null,
-      pendingLengthCm: null,
-      pendingFishScale: 1,
-      fightProgress: 0,
-      fightMode: 'running',
-      fightModeTimer: 0,
-      fightModeDuration: 1,
-      biteProgress: 0,
-      castPoint: null,
-      castZone: null,
       aimX: aim.x,
       aimY: aim.y,
       aimZone: getStreamZone(aim),
