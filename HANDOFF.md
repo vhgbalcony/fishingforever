@@ -75,13 +75,14 @@
 ### アート（2026-08-09）
 
 - **スタイル錨:** `public/art/ref/anchor-nijimasu-white.jpg`（アプリ Imagine のニジマス）
-- **水中BG錨:** `public/art/ref/anchor-nijimasu-underwater.jpg` → `bg-underwater.jpg`
 - **イラスト魚6種** を同画風で差し替え（白背景キーイング済み PNG）
+- **水中BG:** 魚なしプレート `bg-underwater.jpg`（横スクロール用に3枚タイル）
+- 水中スクロール: 暴れ中は速く流れる／休みは緩い／長押しで速度変化（`Scene2D.tsx`）
 - 旧ファイル: `public/art/legacy/`
 - **ピクセル画風**は未更新（`public/art/pixel/` のまま）
 - マップ3パネルはまだ旧イラスト
 
-最新作業: 長押しファイト + 魚イラスト刷新
+最新作業: 長押しファイト + 魚イラスト刷新 + 水中BGスクロール
 
 ---
 

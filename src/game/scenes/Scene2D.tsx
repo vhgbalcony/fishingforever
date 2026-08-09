@@ -38,6 +38,8 @@ export function Scene2D() {
   const rootRef = useRef<HTMLDivElement>(null)
   const worldRef = useRef<HTMLDivElement>(null)
   const playerEl = useRef<HTMLImageElement>(null)
+  const uwStripRef = useRef<HTMLDivElement>(null)
+  const uwScrollRef = useRef(0)
   const camRef = useRef({ x: MAP.spawn.x, y: MAP.spawn.y })
 
   const phase = useGameStore((s) => s.phase)
@@ -50,6 +52,7 @@ export function Scene2D() {
   const nearWater = useGameStore((s) => s.nearWater)
   const pendingFishScale = useGameStore((s) => s.pendingFishScale)
   const fightMode = useGameStore((s) => s.fightMode)
+  const pullHeld = useGameStore((s) => s.pullHeld)
   const setPlayerPose = useGameStore((s) => s.setPlayerPose)
   const setAim = useGameStore((s) => s.setAim)
   const castAt = useGameStore((s) => s.castAt)
@@ -235,6 +238,33 @@ export function Scene2D() {
         tickFight(dt)
       }
 
+      // 水中: 背景横スクロール（暴れ＝速く流れる／休み＝緩い／長押しで逆寄り）
+      if (
+        uwStripRef.current &&
+        (state.phase === 'underwater_fight' || state.phase === 'catch_result')
+      ) {
+        let speed = 18 // px/s 微ドリフト
+        if (state.phase === 'underwater_fight') {
+          if (state.fightMode === 'running') {
+            // 魚が逃げてる → 景色が流れる。無理引き中は逆に少し戻る
+            speed = state.pullHeld ? -70 : 140
+          } else {
+            // 休み: ほぼ止まる。寄せてる間は手前に少し引き戻す
+            speed = state.pullHeld ? 48 : 10
+          }
+        } else {
+          speed = 22 // 釣果画面はゆっくり
+        }
+        uwScrollRef.current += speed * dt
+        const tileW =
+          uwStripRef.current.scrollWidth / 3 || window.innerWidth || 800
+        // 0〜tileW にラップ
+        let o = uwScrollRef.current % tileW
+        if (o < 0) o += tileW
+        uwScrollRef.current = o
+        uwStripRef.current.style.transform = `translate3d(${-o}px, 0, 0)`
+      }
+
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -253,14 +283,25 @@ export function Scene2D() {
   }`
 
   if (underwater) {
+    const uwClass =
+      phase === 'underwater_fight'
+        ? fightMode === 'running'
+          ? pullHeld
+            ? 'uw-pulling-run'
+            : 'uw-running'
+          : pullHeld
+            ? 'uw-pulling-rest'
+            : 'uw-resting'
+        : 'uw-landed'
     return (
-      <div className={sceneClass} ref={rootRef}>
-        <img
-          className="scene2d-bg"
-          src={art.bgUnderwater}
-          alt=""
-          draggable={false}
-        />
+      <div className={`${sceneClass} ${uwClass}`} ref={rootRef}>
+        <div className="uw-bg-viewport" aria-hidden>
+          <div className="uw-bg-strip" ref={uwStripRef}>
+            <img src={art.bgUnderwater} alt="" draggable={false} />
+            <img src={art.bgUnderwater} alt="" draggable={false} />
+            <img src={art.bgUnderwater} alt="" draggable={false} />
+          </div>
+        </div>
         <div className="water-rays" />
         {activeSpecies && (
           <img
@@ -282,6 +323,8 @@ export function Scene2D() {
         <div className="bubble b1" />
         <div className="bubble b2" />
         <div className="bubble b3" />
+        <div className="bubble b4" />
+        <div className="bubble b5" />
       </div>
     )
   }
