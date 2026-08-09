@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react'
 import { fishArt, getArt, PANEL_ORDER } from '../artAssets'
 import { playerPose } from '../playerPose'
 import { useGameStore } from '../store'
@@ -102,15 +102,35 @@ export function Scene2D() {
     return () => clearTimeout(t)
   }, [phase, finishCast])
 
-  // 水中に入るたびにスクロール位置をリセット（マップ復帰時のゴミ residual 防止）
+  // 水中入場: スクロールリセット
   useEffect(() => {
     if (phase === 'underwater_fight') {
       uwScrollRef.current = 0
-      if (uwStripRef.current) {
-        uwStripRef.current.style.transform = 'translate3d(0, 0, 0)'
-      }
     }
   }, [phase])
+
+  /**
+   * マップ復帰時のレイアウト修復。
+   * 水中ストリップに付けた transform が React の DOM 再利用で
+   * map-panels に残ると、釣り後にマップが画面外へ飛ぶ。
+   */
+  useLayoutEffect(() => {
+    if (underwater) return
+    const cam = clampCamera(playerPose.x, playerPose.y)
+    camRef.current = { x: cam.x, y: cam.y }
+    const root = rootRef.current
+    const world = worldRef.current
+    if (root) {
+      root.style.transform = ''
+      root.style.setProperty('--px', cam.x.toFixed(2))
+      root.style.setProperty('--py', cam.y.toFixed(2))
+      root.style.setProperty('--map-scale-x', String(MAP.mapScaleX))
+      root.style.setProperty('--map-scale-y', String(MAP.mapScaleY))
+    }
+    if (world) {
+      world.style.transform = ''
+    }
+  }, [underwater, phase])
 
   // ポインタ → マップ%（縦長 world 矩形基準）
   const clientToMap = (clientX: number, clientY: number) => {
@@ -307,7 +327,11 @@ export function Scene2D() {
             : 'uw-resting'
         : 'uw-landed'
     return (
-      <div className={`${sceneClass} ${uwClass}`} ref={rootRef}>
+      <div
+        className={`${sceneClass} ${uwClass}`}
+        ref={rootRef}
+        key="scene-underwater"
+      >
         <div className="uw-bg-viewport" aria-hidden>
           <div className="uw-bg-strip" ref={uwStripRef}>
             <img src={art.bgUnderwater} alt="" draggable={false} />
@@ -346,7 +370,12 @@ export function Scene2D() {
   }
 
   return (
-    <div className={sceneClass} ref={rootRef} style={{ filter: timeFilter }}>
+    <div
+      className={sceneClass}
+      ref={rootRef}
+      key="scene-surface"
+      style={{ filter: timeFilter }}
+    >
       <div className="scene2d-world" ref={worldRef}>
         <div className="map-panels" aria-hidden>
           {PANEL_ORDER.map((id) => (
