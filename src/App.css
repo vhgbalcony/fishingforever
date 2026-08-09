@@ -447,6 +447,12 @@
   background-size: cover;
 }
 
+/* 博物画魚: 白縁残りを抑える */
+.fish-art,
+.fight-fish {
+  background: transparent;
+}
+
 .fish-art {
   max-width: 92%;
   max-height: 130px;

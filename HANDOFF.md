@@ -1,7 +1,7 @@
 # Fishingforever — セッション引継ぎメモ
 
 > **次の Grok へ:** このファイルを最初に読んでから作業すること。  
-> 最終更新: **2026-08-06**（長押しファイト実装・Vercel デプロイ直後に中断）
+> 最終更新: **2026-08-09**（イラスト魚6種＋水中BGを Imagine 級に差し替え）
 
 ---
 
@@ -72,7 +72,16 @@
 | アマゴ | 1.05 |
 | ニジマス | 1.4 |
 
-最新コミット例: `53cc035` — *Add hold-to-reel fight with species pull power.*
+### アート（2026-08-09）
+
+- **スタイル錨:** `public/art/ref/anchor-nijimasu-white.jpg`（アプリ Imagine のニジマス）
+- **水中BG錨:** `public/art/ref/anchor-nijimasu-underwater.jpg` → `bg-underwater.jpg`
+- **イラスト魚6種** を同画風で差し替え（白背景キーイング済み PNG）
+- 旧ファイル: `public/art/legacy/`
+- **ピクセル画風**は未更新（`public/art/pixel/` のまま）
+- マップ3パネルはまだ旧イラスト
+
+最新作業: 長押しファイト + 魚イラスト刷新
 
 ---
 

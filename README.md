@@ -59,13 +59,12 @@ npm run preview
 
 ## アセット
 
-アセット:
-
 - イラスト: `public/art/`
-  - マップパネル: `bg-panel-upper.jpg` / `bg-panel-middle.jpg` / `bg-panel-lower.jpg`
+  - 魚 6 種: 博物画風（Imagine 錨 `public/art/ref/` 準拠）。白背景は透過処理済み
+  - 水中: `bg-underwater.jpg`（清流の水中）
+  - マップパネル: `bg-panel-upper.jpg` / `bg-panel-middle.jpg` / `bg-panel-lower.jpg`（未刷新）
 - ピクセル: `public/art/pixel/`（スプライト）。マップは縦パネルを共用
-
-プレイヤー・ウキ・魚 6 種を同構成で配置。
+- 旧イラスト退避: `public/art/legacy/`
 
 ## Vercel へのデプロイ
 
