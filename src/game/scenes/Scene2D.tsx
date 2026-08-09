@@ -248,35 +248,36 @@ export function Scene2D() {
         tickFight(dt)
       }
 
-      // 水中BGスクロール（カメラが魚を追う感覚）
-      // 正の speed → ストリップを右へ = 景色は左→右（魚が奥へ逃げる）
-      // 負の speed → ストリップを左へ = 景色は右→左（プレイヤーが寄せてる）
+      // 水中BGスクロール（3枚タイル・隙間なし）
+      // 正の speed = 逃げ方向／負 = 寄せ。transform は -tileW+o で常に画面を埋める
       if (
         uwStripRef.current &&
         (state.phase === 'underwater_fight' || state.phase === 'catch_result')
       ) {
-        let speed = 14 // px/s 微ドリフト（逃げ方向）
+        let speed = 14
         if (state.phase === 'underwater_fight') {
           if (state.fightMode === 'running') {
-            // 逃げ: 景色が流れて逃げる感。無理引き中は寄せ方向に少し戻す
             speed = state.pullHeld ? -55 : 150
           } else {
-            // 休み: ほぼ静止。長押し寄せ中は手前（寄せ）方向
             speed = state.pullHeld ? -52 : 8
           }
         } else {
-          speed = 12 // 釣果はごくゆっくり逃げ側
+          speed = 12
         }
         uwScrollRef.current += speed * dt
+        const first = uwStripRef.current.firstElementChild as HTMLElement | null
         const tileW =
-          uwStripRef.current.scrollWidth / 3 || window.innerWidth || 800
-        let o = uwScrollRef.current % tileW
-        if (o < 0) o += tileW
-        uwScrollRef.current = o
-        // 正のオフセットで右へずらす（逃げ＝左→右に景色が流れる）
-        uwStripRef.current.style.transform = `translate3d(${o}px, 0, 0)`
+          first?.offsetWidth ||
+          uwStripRef.current.scrollWidth / 3 ||
+          window.innerWidth ||
+          800
+        if (tileW > 1) {
+          let o = uwScrollRef.current % tileW
+          if (o < 0) o += tileW
+          uwScrollRef.current = o
+          uwStripRef.current.style.transform = `translate3d(${-tileW + o}px, 0, 0)`
+        }
       }
-
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
