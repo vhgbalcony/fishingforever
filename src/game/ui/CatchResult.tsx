@@ -17,9 +17,11 @@ export function CatchResult() {
   const wouldBeFirst = !entry || entry.timesCaught === 0
   const wouldBeRecord =
     entry && lastCatch.lengthCm > (entry.maxLengthCm ?? 0)
+  // 博物画アセットは余白が大きいので、イラスト時は表示を底上げ
+  const artPad = artStyle === 'illustration' ? 1.75 : 1
   const scale = species
-    ? fishDisplayScale(species, lastCatch.lengthCm)
-    : 1
+    ? Math.min(2.35, fishDisplayScale(species, lastCatch.lengthCm) * artPad)
+    : artPad
   const stage = lastCatch.lifeStage
   const stageClass =
     stage === 'juvenile' ? 'stage-juvenile' : stage === 'trophy' ? 'stage-trophy' : 'stage-adult'

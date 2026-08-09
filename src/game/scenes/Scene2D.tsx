@@ -238,31 +238,33 @@ export function Scene2D() {
         tickFight(dt)
       }
 
-      // 水中: 背景横スクロール（暴れ＝速く流れる／休み＝緩い／長押しで逆寄り）
+      // 水中BGスクロール（カメラが魚を追う感覚）
+      // 正の speed → ストリップを右へ = 景色は左→右（魚が奥へ逃げる）
+      // 負の speed → ストリップを左へ = 景色は右→左（プレイヤーが寄せてる）
       if (
         uwStripRef.current &&
         (state.phase === 'underwater_fight' || state.phase === 'catch_result')
       ) {
-        let speed = 18 // px/s 微ドリフト
+        let speed = 14 // px/s 微ドリフト（逃げ方向）
         if (state.phase === 'underwater_fight') {
           if (state.fightMode === 'running') {
-            // 魚が逃げてる → 景色が流れる。無理引き中は逆に少し戻る
-            speed = state.pullHeld ? -70 : 140
+            // 逃げ: 景色が流れて逃げる感。無理引き中は寄せ方向に少し戻す
+            speed = state.pullHeld ? -55 : 150
           } else {
-            // 休み: ほぼ止まる。寄せてる間は手前に少し引き戻す
-            speed = state.pullHeld ? 48 : 10
+            // 休み: ほぼ静止。長押し寄せ中は手前（寄せ）方向
+            speed = state.pullHeld ? -52 : 8
           }
         } else {
-          speed = 22 // 釣果画面はゆっくり
+          speed = 12 // 釣果はごくゆっくり逃げ側
         }
         uwScrollRef.current += speed * dt
         const tileW =
           uwStripRef.current.scrollWidth / 3 || window.innerWidth || 800
-        // 0〜tileW にラップ
         let o = uwScrollRef.current % tileW
         if (o < 0) o += tileW
         uwScrollRef.current = o
-        uwStripRef.current.style.transform = `translate3d(${-o}px, 0, 0)`
+        // 正のオフセットで右へずらす（逃げ＝左→右に景色が流れる）
+        uwStripRef.current.style.transform = `translate3d(${o}px, 0, 0)`
       }
 
       raf = requestAnimationFrame(tick)
@@ -315,7 +317,10 @@ export function Scene2D() {
             draggable={false}
             style={
               {
-                ['--fish-scale']: String(pendingFishScale),
+                // 博物画はキャンバス余白が大きいのでイラスト時は底上げ
+                ['--fish-scale']: String(
+                  pendingFishScale * (isPixel ? 1 : 1.55),
+                ),
               } as CSSProperties
             }
           />

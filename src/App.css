@@ -349,7 +349,7 @@
   left: 50%;
   top: 48%;
   /* 基準幅 ≈ 20cm 魚。--fish-scale は体長 cm / 20 */
-  width: min(46vw, 340px);
+  width: min(58vw, 420px);
   --fish-scale: 1;
   transform: translate(-50%, -50%) scale(var(--fish-scale));
   filter: drop-shadow(0 12px 24px rgba(0, 40, 50, 0.45));
@@ -494,8 +494,11 @@
 }
 
 .fish-preview.illustrated {
-  height: 150px;
+  height: 200px;
   background-size: cover;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
 }
 
 /* 博物画魚: 白縁残りを抑える */
@@ -505,8 +508,9 @@
 }
 
 .fish-art {
-  max-width: 92%;
-  max-height: 130px;
+  max-width: 100%;
+  max-height: 190px;
+  width: 100%;
   object-fit: contain;
   animation: swim 1.6s ease-in-out infinite;
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
