@@ -102,6 +102,16 @@ export function Scene2D() {
     return () => clearTimeout(t)
   }, [phase, finishCast])
 
+  // 水中に入るたびにスクロール位置をリセット（マップ復帰時のゴミ residual 防止）
+  useEffect(() => {
+    if (phase === 'underwater_fight') {
+      uwScrollRef.current = 0
+      if (uwStripRef.current) {
+        uwStripRef.current.style.transform = 'translate3d(0, 0, 0)'
+      }
+    }
+  }, [phase])
+
   // ポインタ → マップ%（縦長 world 矩形基準）
   const clientToMap = (clientX: number, clientY: number) => {
     const el = worldRef.current
@@ -317,9 +327,9 @@ export function Scene2D() {
             draggable={false}
             style={
               {
-                // 博物画はキャンバス余白が大きいのでイラスト時は底上げ
+                // 博物画の余白対策（水中は控えめ。釣果カードは別係数）
                 ['--fish-scale']: String(
-                  pendingFishScale * (isPixel ? 1 : 1.55),
+                  pendingFishScale * (isPixel ? 1 : 1.12),
                 ),
               } as CSSProperties
             }
