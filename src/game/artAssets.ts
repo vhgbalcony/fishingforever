@@ -75,6 +75,42 @@ export function fishArt(speciesId: string, style: ArtStyle = 'illustration'): st
   return pack.fish[speciesId] ?? pack.fish.yamame
 }
 
+/**
+ * イラスト用の簡易ポーズアニメ（SFC風コマ送りの入口）。
+ * ある種だけ複数枚。無い種は null → 静止画。
+ */
+export type FishAnimPose = 'base' | 'thrash' | 'calm'
+
+const FISH_ANIM_FRAMES: Partial<
+  Record<string, Partial<Record<FishAnimPose, string>>>
+> = {
+  nijimasu: {
+    base: '/art/anim/nijimasu/base.png',
+    thrash: '/art/anim/nijimasu/thrash.png',
+    calm: '/art/anim/nijimasu/calm.png',
+  },
+}
+
+export function fishAnimFrame(
+  speciesId: string,
+  pose: FishAnimPose,
+  style: ArtStyle = 'illustration',
+): string | null {
+  if (style !== 'illustration') return null
+  return FISH_ANIM_FRAMES[speciesId]?.[pose] ?? null
+}
+
+/** ファイト状態からポーズ列を決める（コマ送り用） */
+export function fishAnimSequence(
+  fightMode: 'running' | 'resting',
+  pullHeld: boolean,
+): FishAnimPose[] {
+  if (fightMode === 'running') {
+    return pullHeld ? ['thrash', 'base', 'thrash'] : ['thrash', 'base']
+  }
+  return pullHeld ? ['calm', 'base'] : ['calm', 'base', 'calm']
+}
+
 export const ART_STYLE_LABEL: Record<ArtStyle, string> = {
   illustration: 'イラスト',
   pixel: 'ピクセル',

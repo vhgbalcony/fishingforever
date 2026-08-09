@@ -1,5 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react'
-import { fishArt, getArt, PANEL_ORDER } from '../artAssets'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
+import {
+  fishAnimFrame,
+  fishAnimSequence,
+  fishArt,
+  getArt,
+  PANEL_ORDER,
+} from '../artAssets'
 import { playerPose } from '../playerPose'
 import { useGameStore } from '../store'
 import { clampCamera, clampWalk, MAP, ZONE_LABEL } from '../world'
@@ -63,6 +75,17 @@ export function Scene2D() {
   const art = getArt(artStyle)
   const isPixel = artStyle === 'pixel'
   const underwater = phase === 'underwater_fight' || phase === 'catch_result'
+  const [animTick, setAnimTick] = useState(0)
+
+  // ニジマス等：コマ送り（SFC風）。枚数がある種だけ
+  useEffect(() => {
+    if (phase !== 'underwater_fight' || !activeSpecies) return
+    const hasAnim = !!fishAnimFrame(activeSpecies.id, 'thrash', artStyle)
+    if (!hasAnim) return
+    const ms = fightMode === 'running' ? (pullHeld ? 140 : 200) : 380
+    const id = window.setInterval(() => setAnimTick((t) => t + 1), ms)
+    return () => clearInterval(id)
+  }, [phase, activeSpecies, fightMode, pullHeld, artStyle])
   const showBobber =
     !underwater &&
     castPoint &&
@@ -347,15 +370,40 @@ export function Scene2D() {
                 ? [
                     'fight-fish',
                     'mystery',
-                    fightMode === 'running' ? 'thrashing' : 'resting',
-                    fightMode === 'running' && pullHeld ? 'resisting' : '',
-                    fightMode === 'resting' && pullHeld ? 'reeling' : '',
+                    // コマ送りがある種は CSS のしなりを弱め、ポーズ絵に任せる
+                    fishAnimFrame(activeSpecies.id, 'thrash', artStyle)
+                      ? fightMode === 'running'
+                        ? 'pose-anim thrashing-soft'
+                        : 'pose-anim resting-soft'
+                      : fightMode === 'running'
+                        ? 'thrashing'
+                        : 'resting',
+                    !fishAnimFrame(activeSpecies.id, 'thrash', artStyle) &&
+                    fightMode === 'running' &&
+                    pullHeld
+                      ? 'resisting'
+                      : '',
+                    !fishAnimFrame(activeSpecies.id, 'thrash', artStyle) &&
+                    fightMode === 'resting' &&
+                    pullHeld
+                      ? 'reeling'
+                      : '',
                   ]
                     .filter(Boolean)
                     .join(' ')
                 : 'fight-fish mystery landed'
             }
-            src={fishArt(activeSpecies.id, artStyle)}
+            src={(() => {
+              if (phase !== 'underwater_fight' || artStyle !== 'illustration') {
+                return fishArt(activeSpecies.id, artStyle)
+              }
+              const seq = fishAnimSequence(fightMode, pullHeld)
+              const pose = seq[animTick % seq.length]!
+              return (
+                fishAnimFrame(activeSpecies.id, pose, artStyle) ??
+                fishArt(activeSpecies.id, artStyle)
+              )
+            })()}
             alt="掛かった魚"
             draggable={false}
             style={
