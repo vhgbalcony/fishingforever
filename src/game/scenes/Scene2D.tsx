@@ -80,9 +80,9 @@ export function Scene2D() {
   // ニジマス等：コマ送り（SFC風）。枚数がある種だけ
   useEffect(() => {
     if (phase !== 'underwater_fight' || !activeSpecies) return
-    const hasAnim = !!fishAnimFrame(activeSpecies.id, 'thrash', artStyle)
+    const hasAnim = !!fishAnimFrame(activeSpecies.id, 'swim', artStyle)
     if (!hasAnim) return
-    const ms = fightMode === 'running' ? (pullHeld ? 140 : 200) : 380
+    const ms = fightMode === 'running' ? (pullHeld ? 160 : 220) : 400
     const id = window.setInterval(() => setAnimTick((t) => t + 1), ms)
     return () => clearInterval(id)
   }, [phase, activeSpecies, fightMode, pullHeld, artStyle])
@@ -371,19 +371,19 @@ export function Scene2D() {
                     'fight-fish',
                     'mystery',
                     // コマ送りがある種は CSS のしなりを弱め、ポーズ絵に任せる
-                    fishAnimFrame(activeSpecies.id, 'thrash', artStyle)
+                    fishAnimFrame(activeSpecies.id, 'swim', artStyle)
                       ? fightMode === 'running'
                         ? 'pose-anim thrashing-soft'
                         : 'pose-anim resting-soft'
                       : fightMode === 'running'
                         ? 'thrashing'
                         : 'resting',
-                    !fishAnimFrame(activeSpecies.id, 'thrash', artStyle) &&
+                    !fishAnimFrame(activeSpecies.id, 'swim', artStyle) &&
                     fightMode === 'running' &&
                     pullHeld
                       ? 'resisting'
                       : '',
-                    !fishAnimFrame(activeSpecies.id, 'thrash', artStyle) &&
+                    !fishAnimFrame(activeSpecies.id, 'swim', artStyle) &&
                     fightMode === 'resting' &&
                     pullHeld
                       ? 'reeling'

@@ -76,17 +76,18 @@ export function fishArt(speciesId: string, style: ArtStyle = 'illustration'): st
 }
 
 /**
- * イラスト用の簡易ポーズアニメ（SFC風コマ送りの入口）。
- * ある種だけ複数枚。無い種は null → 静止画。
+ * イラスト用ポーズコマ（SFC風）。
+ * swim = 逃げターンの泳ぎ / resist = 逃げ中に引っ張った抵抗 / calm = 休み
  */
-export type FishAnimPose = 'base' | 'thrash' | 'calm'
+export type FishAnimPose = 'base' | 'swim' | 'resist' | 'calm'
 
 const FISH_ANIM_FRAMES: Partial<
   Record<string, Partial<Record<FishAnimPose, string>>>
 > = {
   nijimasu: {
     base: '/art/anim/nijimasu/base.png',
-    thrash: '/art/anim/nijimasu/thrash.png',
+    swim: '/art/anim/nijimasu/swim.png',
+    resist: '/art/anim/nijimasu/resist.png',
     calm: '/art/anim/nijimasu/calm.png',
   },
 }
@@ -100,15 +101,19 @@ export function fishAnimFrame(
   return FISH_ANIM_FRAMES[speciesId]?.[pose] ?? null
 }
 
-/** ファイト状態からポーズ列を決める（コマ送り用） */
+/** ファイト状態からポーズ列を決める */
 export function fishAnimSequence(
   fightMode: 'running' | 'resting',
   pullHeld: boolean,
 ): FishAnimPose[] {
   if (fightMode === 'running') {
-    return pullHeld ? ['thrash', 'base', 'thrash'] : ['thrash', 'base']
+    // 逃げ：泳ぎ ↔ 基本。無理引き中は抵抗ポーズを多めに
+    return pullHeld
+      ? ['resist', 'swim', 'resist']
+      : ['swim', 'base', 'swim']
   }
-  return pullHeld ? ['calm', 'base'] : ['calm', 'base', 'calm']
+  // 休み：落ち着き。寄せ中は base も混ぜて変化
+  return pullHeld ? ['calm', 'base', 'calm'] : ['calm', 'base']
 }
 
 export const ART_STYLE_LABEL: Record<ArtStyle, string> = {
