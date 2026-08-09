@@ -344,7 +344,15 @@ export function Scene2D() {
           <img
             className={
               phase === 'underwater_fight'
-                ? `fight-fish mystery ${fightMode === 'running' ? 'thrashing' : 'resting'}`
+                ? [
+                    'fight-fish',
+                    'mystery',
+                    fightMode === 'running' ? 'thrashing' : 'resting',
+                    fightMode === 'running' && pullHeld ? 'resisting' : '',
+                    fightMode === 'resting' && pullHeld ? 'reeling' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
                 : 'fight-fish mystery landed'
             }
             src={fishArt(activeSpecies.id, artStyle)}

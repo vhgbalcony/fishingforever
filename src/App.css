@@ -330,15 +330,32 @@
   display: block;
   height: 100%;
   box-sizing: border-box;
-  flex: 0 0 calc(100% / 3);
-  width: calc(100% / 3);
-  min-width: calc(100% / 3);
-  max-width: calc(100% / 3);
+  /* わずかに重ねて継ぎ目をぼかす */
+  flex: 0 0 calc(100% / 3 + 1.2%);
+  width: calc(100% / 3 + 1.2%);
+  min-width: calc(100% / 3 + 1.2%);
+  max-width: calc(100% / 3 + 1.2%);
+  margin-left: -0.6%;
   object-fit: cover;
   object-position: center bottom;
   user-select: none;
   pointer-events: none;
   filter: saturate(1.08);
+  /* 左右端をソフトに溶かす（タイル継ぎ目隠し） */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 2.5%,
+    #000 97.5%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 2.5%,
+    #000 97.5%,
+    transparent 100%
+  );
 }
 
 /* 状態で泡の速さを少し変える */
@@ -364,23 +381,37 @@
   animation: fight-swim 2.4s ease-in-out infinite;
   z-index: 10;
   pointer-events: none;
-  transform-origin: center center;
+  /* 口元（針）を軸にすると抵抗感が出やすい */
+  transform-origin: 18% 50%;
 }
 
-/* 暴れてる：激しく動く */
+/* 暴れてる：激しく動く（体のしなり感） */
 .fight-fish.thrashing {
-  animation: fight-thrash 0.45s ease-in-out infinite;
+  animation: fight-thrash 0.42s ease-in-out infinite;
   filter: drop-shadow(0 12px 28px rgba(0, 40, 50, 0.5)) saturate(1.05);
 }
 
-/* 休んでる：ゆっくり・引ける合図 */
+/* 暴れ中に無理引き：針に抗う */
+.fight-fish.thrashing.resisting {
+  animation: fight-resist 0.28s ease-in-out infinite;
+  filter: drop-shadow(0 10px 20px rgba(180, 40, 40, 0.35)) saturate(1.1);
+}
+
+/* 休んでる：ゆっくり泳ぎ */
 .fight-fish.resting {
-  animation: fight-rest 2.8s ease-in-out infinite;
+  animation: fight-rest 2.6s ease-in-out infinite;
   filter: drop-shadow(0 8px 18px rgba(80, 180, 160, 0.35)) brightness(1.06);
 }
 
+/* 休み中に長押し付け：寄せられながら小さく抵抗 */
+.fight-fish.resting.reeling {
+  animation: fight-reel 0.9s ease-in-out infinite;
+  filter: drop-shadow(0 8px 16px rgba(60, 160, 150, 0.4)) brightness(1.08);
+}
+
 .fight-fish.landed {
-  animation: fight-swim 2.4s ease-in-out infinite;
+  animation: fight-landed 2.2s ease-in-out infinite;
+  transform-origin: center center;
 }
 
 @keyframes fight-swim {
@@ -398,32 +429,76 @@
 @keyframes fight-thrash {
   0%,
   100% {
-    transform: translate(-50%, -50%) scale(var(--fish-scale, 1)) rotate(-12deg)
-      translateX(-18px);
+    transform: translate(-50%, -50%) scale(var(--fish-scale, 1), 1)
+      rotate(-14deg) translateX(-16px) skewX(-4deg);
   }
   25% {
-    transform: translate(-50%, calc(-50% - 22px)) scale(var(--fish-scale, 1))
-      rotate(8deg) translateX(14px);
+    transform: translate(-50%, calc(-50% - 18px)) scale(var(--fish-scale, 1), 0.92)
+      rotate(10deg) translateX(12px) skewX(5deg);
   }
   50% {
-    transform: translate(-50%, calc(-50% + 6px)) scale(var(--fish-scale, 1))
-      rotate(-6deg) translateX(20px);
+    transform: translate(-50%, calc(-50% + 8px)) scale(var(--fish-scale, 1), 1.05)
+      rotate(-8deg) translateX(18px) skewX(-3deg);
   }
   75% {
-    transform: translate(-50%, calc(-50% - 16px)) scale(var(--fish-scale, 1))
-      rotate(14deg) translateX(-12px);
+    transform: translate(-50%, calc(-50% - 12px)) scale(var(--fish-scale, 1), 0.94)
+      rotate(16deg) translateX(-10px) skewX(4deg);
+  }
+}
+
+/* 針側を軸に引き延ばされる感じ */
+@keyframes fight-resist {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(var(--fish-scale, 1), 0.9)
+      rotate(-18deg) translateX(-6px);
+  }
+  50% {
+    transform: translate(-50%, calc(-50% - 10px))
+      scale(var(--fish-scale, 1), 1.08) rotate(12deg) translateX(14px);
   }
 }
 
 @keyframes fight-rest {
   0%,
   100% {
+    transform: translate(-50%, -50%) scale(var(--fish-scale, 1), 1) rotate(-2deg)
+      translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(var(--fish-scale, 1), 0.97) rotate(2deg)
+      translateY(-8px);
+  }
+}
+
+@keyframes fight-reel {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(var(--fish-scale, 1)) rotate(-6deg)
+      translateX(4px);
+  }
+  50% {
+    transform: translate(-50%, calc(-50% - 10px)) scale(var(--fish-scale, 1))
+      rotate(5deg) translateX(-6px);
+  }
+}
+
+@keyframes fight-landed {
+  0%,
+  100% {
     transform: translate(-50%, -50%) scale(var(--fish-scale, 1)) rotate(-2deg);
   }
   50% {
-    transform: translate(-50%, calc(-50% - 6px)) scale(var(--fish-scale, 1))
+    transform: translate(-50%, calc(-50% - 5px)) scale(var(--fish-scale, 1))
       rotate(2deg);
   }
+}
+
+/* 白い縁を少し抑えめに（透過が甘くても目立ちにくく） */
+.fight-fish,
+.fish-art {
+  mix-blend-mode: normal;
+  -webkit-backface-visibility: hidden;
 }
 
 .water-rays {
